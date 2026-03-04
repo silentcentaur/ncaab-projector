@@ -61,7 +61,7 @@ def show():
             fig.add_bar(x=pd2["label"], y=pd2["margin"],
                         marker_color=["#22c55e" if m>0 else "#ef4444" for m in pd2["margin"]])
             fig.update_layout(**PLOT_THEME, height=280, xaxis_tickangle=-45, bargap=0.2)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             if len(pd2) >= 5:
                 st.markdown("### Rolling 5-Game Avg")
@@ -73,7 +73,7 @@ def show():
                 fig2.add_scatter(x=pd2["label"],y=pd2["roll_pa"],name="Pts Against",
                                  line=dict(color="#ef4444",width=2,dash="dot"))
                 fig2.update_layout(**PLOT_THEME, height=280, xaxis_tickangle=-45)
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width="stretch")
 
     if not adv_df.empty:
         adv_df.columns = [c.lower() for c in adv_df.columns]
@@ -81,9 +81,9 @@ def show():
         if not adv_filt.empty:
             st.markdown("### Advanced Four Factors by Game")
             ff = [c for c in ["efg_pct","tov_pct","orb_pct","ftr","opp_efg_pct","opp_tov_pct","opp_orb_pct","opp_ftr"] if c in adv_filt.columns]
-            st.dataframe(adv_filt[["date","team","opponent"]+ff].head(50), use_container_width=True, hide_index=True)
+            st.dataframe(adv_filt[["date","team","opponent"]+ff].head(50), width="stretch", hide_index=True)
 
     st.markdown("### Game Log Table")
     cols = [c for c in ["date","team","opponent","venue","points_for","points_against","margin","result"] if c in filt.columns]
-    st.dataframe(filt[cols].head(200).reset_index(drop=True), use_container_width=True, hide_index=True,
+    st.dataframe(filt[cols].head(200).reset_index(drop=True), width="stretch", hide_index=True,
                  column_config={"margin": st.column_config.NumberColumn("Margin", format="%+.0f")})

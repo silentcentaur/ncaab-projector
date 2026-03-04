@@ -60,7 +60,7 @@ def show():
                 line=dict(color="#1e2d45", width=1, dash="dot"))
         fig.update_layout(**PLOT_THEME, height=480,
                           coloraxis_colorbar=dict(title="Net Eff."))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     if "net_eff" in df.columns:
         st.markdown("### Top 25 — Net Efficiency")
@@ -72,7 +72,7 @@ def show():
         ))
         fig2.update_layout(**PLOT_THEME, height=600,
                            xaxis_title="Net Efficiency (Adj OE − Adj DE)", yaxis_title="")
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     ff_cols = ["efg_pct","tov_pct","orb_pct","ftr"]
     if all(c in df.columns for c in ff_cols) and "net_eff" in df.columns:
@@ -91,7 +91,7 @@ def show():
             fig3.add_trace(go.Scatterpolar(
                 r=vals+[vals[0]], theta=categories+[categories[0]],
                 name=row["team"], line=dict(color=colors[i%len(colors)], width=2),
-                fill="toself", fillcolor=colors[i%len(colors)]+"18",
+                fill="toself", fillcolor="rgba(249,115,22,0.1)",
             ))
         fig3.update_layout(**PLOT_THEME, height=450,
             polar=dict(bgcolor="rgba(0,0,0,0)",
@@ -99,4 +99,4 @@ def show():
                        angularaxis=dict(gridcolor="#1e2d45", color="#64748b")),
             legend=dict(font=dict(size=11)),
         )
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")

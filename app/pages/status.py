@@ -50,7 +50,7 @@ def show():
     # ── Full refresh log ──────────────────────────────────────────────────────
     if not log_df.empty:
         with st.expander("Full Refresh Log"):
-            st.dataframe(log_df, use_container_width=True, hide_index=True)
+            st.dataframe(log_df, width="stretch", hide_index=True)
 
     # ── Manual cache clear ────────────────────────────────────────────────────
     st.markdown("### Cache")
