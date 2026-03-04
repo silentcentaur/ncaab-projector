@@ -19,6 +19,45 @@ CONF_COLORS = [
     "#4ade80","#facc15","#60a5fa","#f472b6","#34d399",
 ]
 
+def rankings_html(df_top):
+    """Render a styled top-10 rankings card list."""
+    medal = {1: "🥇", 2: "🥈", 3: "🥉"}
+    html = '<div style="display:flex;flex-direction:column;gap:6px;">'
+    for i, row in df_top.iterrows():
+        rank     = i
+        team     = row.get("team", "—")
+        conf     = row.get("conference", "")
+        record   = row.get("record", "")
+        net      = row.get("net_eff")
+        adj_oe   = row.get("adj_oe")
+        adj_de   = row.get("adj_de")
+        net_str  = f"{net:+.1f}" if net is not None and not pd.isna(net) else "—"
+        oe_str   = f"{adj_oe:.1f}" if adj_oe is not None and not pd.isna(adj_oe) else "—"
+        de_str   = f"{adj_de:.1f}" if adj_de is not None and not pd.isna(adj_de) else "—"
+        icon     = medal.get(rank, f"<span style='color:#475569;font-size:0.8rem;'>#{rank}</span>")
+        net_color = "#22c55e" if net and net > 0 else "#ef4444"
+        html += f"""
+        <div style="display:flex;align-items:center;background:#111827;border:1px solid #1e2d45;
+                    border-radius:6px;padding:0.6rem 1rem;gap:1rem;">
+            <div style="width:28px;text-align:center;font-size:1.1rem;">{icon}</div>
+            <div style="flex:1;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#f1f5f9;line-height:1.1;">{team}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:#64748b;">{conf} · {record}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.2rem;color:{net_color};">{net_str}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:0.6rem;color:#475569;">NET EFF</div>
+            </div>
+            <div style="text-align:right;min-width:80px;">
+                <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:#94a3b8;">
+                    <span style="color:#f97316;">{oe_str}</span> / <span style="color:#22c55e;">{de_str}</span>
+                </div>
+                <div style="font-family:'DM Mono',monospace;font-size:0.6rem;color:#475569;">OE / DE</div>
+            </div>
+        </div>"""
+    html += '</div>'
+    return html
+
 def show():
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
@@ -43,49 +82,21 @@ def show():
     top_conf    = df.groupby("conference")["net_eff"].mean().idxmax() if "conference" in df.columns else "—"
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("D1 Teams",     total_teams)
-    c2.metric("Games Played", total_games)
-    c3.metric("#1 Team",      top_team)
+    c1.metric("D1 Teams",       total_teams)
+    c2.metric("Games Played",   total_games)
+    c3.metric("#1 Team",        top_team)
     c4.metric("Top Conference", top_conf)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Top 25 leaderboard ────────────────────────────────────────────────────
-    st.markdown("### 🏆 Top 25 Power Rankings")
-    st.markdown('<div class="tag">Ranked by Net Efficiency · Adjusted per 100 possessions</div><br>', unsafe_allow_html=True)
+    # ── Top 10 rankings cards ─────────────────────────────────────────────────
+    st.markdown("### 🏆 Power Rankings")
+    st.markdown('<div class="tag">Top 10 · Ranked by Net Efficiency</div><br>', unsafe_allow_html=True)
 
     if "net_eff" in df.columns:
-        top25 = df.nlargest(25, "net_eff").reset_index(drop=True)
-        top25.index += 1
-
-        display_cols = {
-            "team":      "Team",
-            "conference":"Conf",
-            "record":    "Record",
-            "adj_oe":    "Adj OE",
-            "adj_de":    "Adj DE",
-            "net_eff":   "Net Eff",
-            "adj_tempo": "Tempo",
-            "efg_pct":   "eFG%",
-        }
-        show_cols = [c for c in display_cols if c in top25.columns]
-        display_df = top25[show_cols].rename(columns=display_cols)
-
-        # Round numerics
-        for col in ["Adj OE","Adj DE","Net Eff","Tempo"]:
-            if col in display_df.columns:
-                display_df[col] = display_df[col].round(1)
-        if "eFG%" in display_df.columns:
-            display_df["eFG%"] = pd.to_numeric(display_df["eFG%"], errors="coerce").round(3)
-
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            column_config={
-                "Net Eff": st.column_config.NumberColumn("Net Eff", format="%+.1f"),
-                "eFG%":    st.column_config.NumberColumn("eFG%",    format="%.3f"),
-            }
-        )
+        top10 = df.nlargest(10, "net_eff").reset_index(drop=True)
+        top10.index = top10.index + 1
+        st.markdown(rankings_html(top10), unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -94,10 +105,10 @@ def show():
     st.markdown('<div class="tag">Offense vs Defense · All D1 Teams · Lower defensive efficiency = better defense</div><br>', unsafe_allow_html=True)
 
     if "adj_oe" in df.columns and "adj_de" in df.columns and "conference" in df.columns:
-        confs  = sorted(df["conference"].dropna().unique().tolist())
+        confs     = sorted(df["conference"].dropna().unique().tolist())
         color_map = {c: CONF_COLORS[i % len(CONF_COLORS)] for i, c in enumerate(confs)}
 
-        # Label top 25
+        # Default: label top 25. When filtered to 1 conf, label all.
         top25_teams = set(df.nlargest(25, "net_eff")["team"].tolist()) if "net_eff" in df.columns else set()
         df["label"] = df["team"].apply(lambda t: t if t in top25_teams else "")
 
@@ -108,40 +119,55 @@ def show():
             color_discrete_map=color_map,
             text="label",
             hover_data={c: True for c in ["record","net_eff","conference"] if c in df.columns},
-            labels={"adj_oe": "Adj. Offensive Efficiency", "adj_de": "Adj. Defensive Efficiency",
-                    "conference": "Conference"},
+            labels={
+                "adj_oe": "Adj. Offensive Efficiency",
+                "adj_de": "Adj. Defensive Efficiency",
+                "conference": "Conference"
+            },
         )
         fig.update_yaxes(autorange="reversed")
-        fig.update_traces(marker=dict(size=7, opacity=0.8),
-                          textposition="top center",
-                          textfont=dict(size=8, color="#94a3b8"))
+
+        # Text color: pick contrasting color per point based on conference color
+        fig.update_traces(
+            marker=dict(size=7, opacity=0.8),
+            textposition="top center",
+            textfont=dict(size=8),
+            # Show all labels when a legend item is isolated via double-click
+            # by using a lighter color that works on dark bg
+        )
+        # Override text color per trace to match conference color (readable on dark bg)
+        for trace in fig.data:
+            conf_color = color_map.get(trace.name, "#94a3b8")
+            trace.textfont = dict(size=8, color=conf_color)
+
         # Quadrant lines
         med_oe = df["adj_oe"].median()
         med_de = df["adj_de"].median()
-        for val, axis in [(med_oe,"x"),(med_de,"y")]:
+        for val, axis in [(med_oe, "x"), (med_de, "y")]:
             fig.add_shape(type="line",
                 x0=val if axis=="x" else df["adj_oe"].min(),
                 x1=val if axis=="x" else df["adj_oe"].max(),
                 y0=val if axis=="y" else df["adj_de"].min(),
                 y1=val if axis=="y" else df["adj_de"].max(),
                 line=dict(color="#1e2d45", width=1, dash="dot"))
+
         # Quadrant labels
         x_max = df["adj_oe"].max(); x_min = df["adj_oe"].min()
         y_max = df["adj_de"].max(); y_min = df["adj_de"].min()
-        for text, x, y in [
-            ("ELITE", x_max-1, y_min+0.5),
-            ("GOOD OFFENSE", x_max-1, y_max-0.5),
-            ("GOOD DEFENSE", x_min+1, y_min+0.5),
-            ("REBUILDING", x_min+1, y_max-0.5),
+        for text, x, y, anchor in [
+            ("ELITE",        x_max-1, y_min+0.5, "right"),
+            ("GOOD OFFENSE", x_max-1, y_max-0.5, "right"),
+            ("GOOD DEFENSE", x_min+1, y_min+0.5, "left"),
+            ("REBUILDING",   x_min+1, y_max-0.5, "left"),
         ]:
             fig.add_annotation(x=x, y=y, text=text, showarrow=False,
-                               font=dict(size=9, color="#1e2d45"),
-                               xanchor="right" if "GOOD O" in text or "ELITE" in text else "left")
+                               font=dict(size=9, color="#1e2d45"), xanchor=anchor)
 
         fig.update_layout(**PLOT_THEME, height=520,
                           legend=dict(font=dict(size=10), itemsizing="constant",
                                       bgcolor="rgba(0,0,0,0)"))
         st.plotly_chart(fig, use_container_width=True)
+        st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click a conference in the legend to isolate it</div><br>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -152,33 +178,49 @@ def show():
     if "adj_oe" in df.columns:
         with off_col:
             st.markdown('<div class="tag orange">Top 10 Offenses</div><br>', unsafe_allow_html=True)
-            top_off = df.nlargest(10, "adj_oe")[["team","adj_oe","conference"]].sort_values("adj_oe")
+            top_off = df.nlargest(10, "adj_oe")[["team","adj_oe"]].sort_values("adj_oe")
+            top_off["adj_oe_int"] = top_off["adj_oe"].round(0).astype(int)
+            x_min_off = top_off["adj_oe"].min() - 1
+            x_max_off = top_off["adj_oe"].max() + 2
             fig_off = go.Figure(go.Bar(
                 x=top_off["adj_oe"], y=top_off["team"],
                 orientation="h",
                 marker_color="#f97316",
-                text=top_off["adj_oe"].round(1),
+                text=top_off["adj_oe_int"],
                 textposition="outside",
+                textfont=dict(color="#f1f5f9", size=11),
             ))
-            fig_off.update_layout(**PLOT_THEME, height=340,
-                                  xaxis_title="Adj. Offensive Efficiency",
-                                  margin=dict(l=0,r=40,t=10,b=10))
+            fig_off.update_layout(
+                **PLOT_THEME, height=340,
+                xaxis=dict(range=[x_min_off, x_max_off], gridcolor="#1e2d45",
+                           zerolinecolor="#1e2d45", tickformat="d"),
+                xaxis_title="", yaxis_title="",
+                margin=dict(l=0, r=50, t=10, b=10),
+            )
             st.plotly_chart(fig_off, use_container_width=True)
 
     if "adj_de" in df.columns:
         with def_col:
             st.markdown('<div class="tag green">Top 10 Defenses</div><br>', unsafe_allow_html=True)
-            top_def = df.nsmallest(10, "adj_de")[["team","adj_de","conference"]].sort_values("adj_de", ascending=False)
+            top_def = df.nsmallest(10, "adj_de")[["team","adj_de"]].sort_values("adj_de", ascending=False)
+            top_def["adj_de_int"] = top_def["adj_de"].round(0).astype(int)
+            x_min_def = top_def["adj_de"].min() - 1
+            x_max_def = top_def["adj_de"].max() + 2
             fig_def = go.Figure(go.Bar(
                 x=top_def["adj_de"], y=top_def["team"],
                 orientation="h",
                 marker_color="#22c55e",
-                text=top_def["adj_de"].round(1),
+                text=top_def["adj_de_int"],
                 textposition="outside",
+                textfont=dict(color="#f1f5f9", size=11),
             ))
-            fig_def.update_layout(**PLOT_THEME, height=340,
-                                  xaxis_title="Adj. Defensive Efficiency (lower = better)",
-                                  margin=dict(l=0,r=40,t=10,b=10))
+            fig_def.update_layout(
+                **PLOT_THEME, height=340,
+                xaxis=dict(range=[x_min_def, x_max_def], gridcolor="#1e2d45",
+                           zerolinecolor="#1e2d45", tickformat="d"),
+                xaxis_title="", yaxis_title="",
+                margin=dict(l=0, r=50, t=10, b=10),
+            )
             st.plotly_chart(fig_def, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -199,12 +241,13 @@ def show():
             y=conf_df["conference"],
             orientation="h",
             marker_color=["#f97316" if v > 0 else "#64748b" for v in conf_df["avg_net"]],
-            text=conf_df["avg_net"].round(2),
+            text=conf_df["avg_net"].round(1),
             textposition="outside",
+            textfont=dict(color="#f1f5f9"),
         ))
         fig_conf.update_layout(**PLOT_THEME, height=420,
                                xaxis_title="Avg. Net Efficiency",
-                               margin=dict(l=0,r=60,t=10,b=10))
+                               margin=dict(l=0, r=60, t=10, b=10))
         st.plotly_chart(fig_conf, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -218,23 +261,18 @@ def show():
         game_df["date"] = pd.to_datetime(game_df["date"], errors="coerce")
 
         recent = (game_df.sort_values("date", ascending=False)
-                         .groupby("team")
-                         .head(10))
+                         .groupby("team").head(10))
         form = (recent.groupby("team")
-                      .agg(
-                          wins=("result", lambda x: (x=="W").sum()),
-                          games=("result", "count"),
-                      )
+                      .agg(wins=("result", lambda x: (x=="W").sum()),
+                           games=("result","count"))
                       .reset_index()
                       .query("games >= 8"))
         form["win_pct"] = form["wins"] / form["games"]
         form["record"]  = form["wins"].astype(str) + "-" + (form["games"]-form["wins"]).astype(str)
         form = form.sort_values("win_pct", ascending=False).head(10)
 
-        # Merge in conference and net eff
         if "conference" in df.columns:
-            form = form.merge(df[["team","conference","net_eff","adj_oe","adj_de"]],
-                              on="team", how="left")
+            form = form.merge(df[["team","conference","net_eff"]], on="team", how="left")
 
         form_display = form[["team","record","win_pct"] +
                             [c for c in ["conference","net_eff"] if c in form.columns]]
@@ -244,7 +282,7 @@ def show():
         })
         form_display["Win%"] = form_display["Win%"].round(3)
         if "Net Eff" in form_display.columns:
-            form_display["Net Eff"] = form_display["Net Eff"].round(1)
+            form_display["Net Eff"] = pd.to_numeric(form_display["Net Eff"], errors="coerce").round(1)
 
         st.dataframe(form_display, use_container_width=True, hide_index=True,
                      column_config={
