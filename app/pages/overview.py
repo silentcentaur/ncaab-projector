@@ -82,7 +82,12 @@ def show():
         colors = ["#f97316","#fbbf24","#22c55e","#06b6d4","#a78bfa","#f43f5e","#84cc16","#fb923c"]
         fig3 = go.Figure()
         for i, (_, row) in enumerate(top8.iterrows()):
-            vals = [row["efg_pct"], 1-row["tov_pct"], row["orb_pct"], row["ftr"]]
+            vals = [
+         	float(row["efg_pct"] or 0),
+    		1 - float(row["tov_pct"] or 0),
+    		float(row["orb_pct"] or 0),
+    		float(row["ftr"] or 0),
+            ]
             fig3.add_trace(go.Scatterpolar(
                 r=vals+[vals[0]], theta=categories+[categories[0]],
                 name=row["team"], line=dict(color=colors[i%len(colors)], width=2),
