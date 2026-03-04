@@ -76,7 +76,7 @@ def show():
             if col in display_df.columns:
                 display_df[col] = display_df[col].round(1)
         if "eFG%" in display_df.columns:
-            display_df["eFG%"] = display_df["eFG%"].round(3)
+	    display_df["eFG%"] = pd.to_numeric(display_df["eFG%"], errors="coerce").round(3)
 
         st.dataframe(
             display_df,
