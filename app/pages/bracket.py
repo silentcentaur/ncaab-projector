@@ -51,7 +51,7 @@ def get_team_in_slot(region, round_idx, game_idx, slot):
     return get_winner(region, round_idx - 1, game_idx * 2 + slot)
 
 # ── Render region as a vertical round-by-round list using st.button ───────────
-def render_region_col(region, df_stats):
+def render_region_col(region, df_stats, key_prefix=""):
     """Render one region as a compact vertical bracket using st.buttons."""
     st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:#f97316;letter-spacing:0.1em;margin-bottom:4px;">{region}</div>', unsafe_allow_html=True)
 
@@ -64,36 +64,37 @@ def render_region_col(region, df_stats):
             winner = get_winner(region, r, g)
 
             for slot, team in [(0, ta), (1, tb)]:
-                seed = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
+                seed  = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
+                other = get_team_in_slot(region, r, g, 1 - slot)
                 if not team:
-                    st.markdown('<div style="height:22px;border:1px dashed #1a2d45;border-radius:3px;margin:1px 0;background:#080f1c;"></div>', unsafe_allow_html=True)
+                    st.markdown('<div style="height:24px;border:1px dashed #1a2d45;border-radius:3px;margin:1px 0;background:#080f1c;"></div>', unsafe_allow_html=True)
                     continue
 
-                is_w = winner == team
-                is_l = winner is not None and winner != team
-                other = get_team_in_slot(region, r, g, 1 - slot)
+                is_w     = winner == team
+                is_l     = winner is not None and winner != team
                 can_pick = other is not None
-
                 seed_str = f"[{seed}] " if seed else ""
-                label = f"{'✓ ' if is_w else ''}{seed_str}{team[:16]}"
+                label    = f"{'✓ ' if is_w else ''}{seed_str}{team[:18]}"
 
-                btn_style = ""
                 if is_w:
-                    btn_style = "color:#22c55e;"
+                    bg, bc, tc, op = "#0f2d1a", "#22c55e", "#22c55e", "1"
                 elif is_l:
-                    btn_style = "opacity:0.4;"
+                    bg, bc, tc, op = "#080f1c", "#1a2d45", "#334155", "0.4"
+                else:
+                    bg, bc, tc, op = "#112240", "#2d4a6b", "#e2e8f0", "1"
 
                 if can_pick:
-                    clicked = st.button(label, key=f"p_{region}_{r}_{g}_{slot}",
+                    # Render as a styled clickable button
+                    clicked = st.button(label, key=f"p_{key_prefix}{region}_{r}_{g}_{slot}",
                                         use_container_width=True)
                     if clicked:
                         set_winner(region, r, g, team)
                         st.rerun()
                 else:
                     st.markdown(
-                        f'<div style="font-size:11px;padding:3px 8px;border:1px solid #2d4a6b;'
-                        f'border-radius:3px;background:#112240;color:#e2e8f0;margin:1px 0;'
-                        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;{btn_style}">'
+                        f'<div style="font-size:11px;padding:2px 8px;border:1px solid {bc};'
+                        f'border-radius:3px;background:{bg};color:{tc};margin:1px 0;height:24px;'
+                        f'line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:{op};">'
                         f'{label}</div>', unsafe_allow_html=True)
 
             # Compare button between team pairs
@@ -101,7 +102,7 @@ def render_region_col(region, df_stats):
                 exp = st.session_state.expanded_matchup
                 is_exp = exp == (region, r, g)
                 cmp_label = "▲" if is_exp else "⚔"
-                if st.button(cmp_label, key=f"cmp_{region}_{r}_{g}", help="Compare teams"):
+                if st.button(cmp_label, key=f"cmp_{key_prefix}{region}_{r}_{g}", help="Compare teams"):
                     st.session_state.expanded_matchup = None if is_exp else (region, r, g)
                     st.rerun()
 
@@ -286,10 +287,30 @@ def render_final_four(df_stats):
 def show():
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
-    /* Make buttons compact for bracket */
-    div[data-testid="stHorizontalBlock"] .stButton>button {
-        padding: 2px 6px !important; font-size: 11px !important;
-        min-height: 26px !important; height: 26px !important;
+    /* Bracket team buttons - look like slots, not orange buttons */
+    .stButton>button {
+        background: #112240 !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #2d4a6b !important;
+        border-radius: 3px !important;
+        padding: 0px 6px !important;
+        font-size: 11px !important;
+        font-family: 'DM Mono', monospace !important;
+        min-height: 24px !important;
+        height: 24px !important;
+        line-height: 24px !important;
+        transition: all 0.1s !important;
+    }
+    .stButton>button:hover {
+        background: #1a3255 !important;
+        border-color: #f97316 !important;
+        color: #f1f5f9 !important;
+    }
+    /* winner button */
+    .stButton>button[kind="secondary"] {
+        background: #0f2d1a !important;
+        border-color: #22c55e !important;
+        color: #22c55e !important;
     }
     </style>""", unsafe_allow_html=True)
     st.markdown("# 🏆 Bracket Simulator")
@@ -329,7 +350,7 @@ def show():
     # Individual region tabs
     for i, region in enumerate(REGIONS):
         with tabs[i + 1]:
-            render_region_col(region, df_stats)
+            render_region_col(region, df_stats, key_prefix="tab_")
             exp = st.session_state.expanded_matchup
             if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
                 _, r_idx, g_idx = exp
