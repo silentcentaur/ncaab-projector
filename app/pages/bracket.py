@@ -168,40 +168,31 @@ def build_bracket_figure(region, df_stats):
                 "game": game_idx, "slot": slot, "team": team
             })
 
-    def add_connector(r, g, pos_this, pos_next):
-        """Draw the bracket connector line from this round to the next."""
-        cx, top_y = pos_this
-        mid_y_top = top_y + SLOT_H / 2       # center of top team
-        mid_y_bot = top_y + SLOT_H + SLOT_GAP + SLOT_H / 2  # center of bottom team
-        mid_y     = (mid_y_top + mid_y_bot) / 2
+    def add_connector(r, g):
+        """Draw bracket connector lines for game g in round r - only on even g."""
+        if g % 2 != 0:
+            return
+        cx_top, top_y_top = positions_by_round[r][g]
+        cx_bot, top_y_bot = positions_by_round[r][g + 1]
+        next_g  = g // 2
+        cx_next, top_y_next = positions_by_round[r + 1][next_g]
+        right_x = cx_top + SLOT_W
+        mid_x   = right_x + ROUND_GAP / 2
 
-        right_x   = cx + SLOT_W
-        next_cx, next_top_y = pos_next
-        # next slot center y
-        next_mid_y = next_top_y + SLOT_H / 2 if g % 2 == 0 else next_top_y + SLOT_H + SLOT_GAP + SLOT_H / 2
+        def matchup_mid(ty):
+            return (ty + SLOT_H/2 + ty + SLOT_H + SLOT_GAP + SLOT_H/2) / 2
 
-        # Horizontal line right from slot
-        shapes.append(dict(type="line",
-            x0=right_x, y0=-mid_y, x1=right_x + ROUND_GAP/2, y1=-mid_y,
+        y_top  = matchup_mid(top_y_top)
+        y_bot  = matchup_mid(top_y_bot)
+        y_next = matchup_mid(top_y_next)
+
+        for y in [y_top, y_bot]:
+            shapes.append(dict(type="line", x0=right_x, y0=-y, x1=mid_x, y1=-y,
+                line=dict(color=C_LINE, width=1.5)))
+        shapes.append(dict(type="line", x0=mid_x, y0=-y_top, x1=mid_x, y1=-y_bot,
             line=dict(color=C_LINE, width=1.5)))
-        # Vertical joining line
-        if g % 2 == 0:
-            next_g = g // 2
-            nx, ny = positions_by_round[r+1][next_g]
-            top_join    = positions_by_round[r][g][1] + SLOT_H / 2
-            bot_join_g  = g + 1
-            if bot_join_g < len(positions_by_round[r]):
-                bot_join = positions_by_round[r][bot_join_g][1] + SLOT_H / 2
-                shapes.append(dict(type="line",
-                    x0=right_x + ROUND_GAP/2, y0=-top_join,
-                    x1=right_x + ROUND_GAP/2, y1=-bot_join,
-                    line=dict(color=C_LINE, width=1.5)))
-                # Horizontal line into next slot
-                next_mid = (top_join + bot_join) / 2
-                shapes.append(dict(type="line",
-                    x0=right_x + ROUND_GAP/2, y0=-next_mid,
-                    x1=next_cx, y1=-next_mid,
-                    line=dict(color=C_LINE, width=1.5)))
+        shapes.append(dict(type="line", x0=mid_x, y0=-y_next, x1=cx_next, y1=-y_next,
+            line=dict(color=C_LINE, width=1.5)))
 
     # Draw all matchups
     for r in range(NUM_ROUNDS):
@@ -221,7 +212,7 @@ def build_bracket_figure(region, df_stats):
 
             # Connector to next round
             if r < NUM_ROUNDS - 1:
-                add_connector(r, g, positions[g], positions_by_round[r+1])
+                add_connector(r, g)
 
     # Elite 8 winner slot (rightmost)
     e8_winner = get_winner(region, 3, 0)
