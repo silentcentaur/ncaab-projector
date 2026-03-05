@@ -122,7 +122,7 @@ with st.sidebar:
 
     page = st.radio(
         "Navigation",
-        ["🏀  Overview", "📊  Team Explorer", "⚔️  Matchup Simulator", "📈  Game Log", "🔄  Data Status"],
+        ["🏀  Overview", "📊  Team Explorer", "⚔️  Matchup Simulator", "🏆  Bracket", "📈  Game Log", "🔄  Data Status"],
         label_visibility="collapsed"
     )
 
@@ -130,4 +130,5 @@ if   "Overview"  in page: from pages import overview;  overview.show()
 elif "Explorer"  in page: from pages import explorer;  explorer.show()
 elif "Matchup"   in page: from pages import matchup;   matchup.show()
 elif "Game Log"  in page: from pages import gamelog;   gamelog.show()
+elif "Bracket"   in page: from pages import bracket;   bracket.show()
 elif "Status"    in page: from pages import status;    status.show()
