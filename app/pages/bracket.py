@@ -48,20 +48,21 @@ def get_team_in_slot(region, round_idx, game_idx, slot):
         return st.session_state.bracket_teams[region].get(FIRST_ROUND_PAIRS[game_idx][slot])
     return get_winner(region, round_idx - 1, game_idx * 2 + slot)
 
-def team_html(region, round_idx, game_idx, slot):
+def team_html(region, round_idx, game_idx, slot, mirrored=False):
     team   = get_team_in_slot(region, round_idx, game_idx, slot)
     winner = get_winner(region, round_idx, game_idx)
     other  = get_team_in_slot(region, round_idx, game_idx, 1 - slot)
     seed   = FIRST_ROUND_PAIRS[game_idx][slot] if round_idx == 0 else None
 
+    base_cls = "team-mirror" if mirrored else "team"
     if not team:
-        return '<div class="team tbd">TBD</div>'
+        return f'<div class="{base_cls} tbd">TBD</div>'
 
     is_winner = winner == team
     is_loser  = winner is not None and winner != team
     can_pick  = other is not None
 
-    cls = "team"
+    cls = base_cls
     if is_winner: cls += " winner"
     elif is_loser: cls += " loser"
     if can_pick:  cls += " pickable"
@@ -73,10 +74,26 @@ def team_html(region, round_idx, game_idx, slot):
 
     return f'<div class="{cls}" onclick="{onclick}" title="{title}">{seed_html}<span class="name">{team}</span></div>'
 
-def build_region_rounds(region):
-    """Build the rounds HTML for a single region (no wrapper)."""
-    rounds_html = ""
-    for r in range(4):
+def build_region_rounds(region, mirrored=False):
+    """Build the rounds HTML for a single region.
+    mirrored=True reverses round order so the first round is on the right,
+    winner slot on the left — bracket faces inward for right-side regions."""
+    rounds = list(range(4))
+    if mirrored:
+        rounds = list(reversed(rounds))
+
+    # Winner slot first if mirrored
+    winner_rounds = ""
+    e8_winner = get_winner(region, 3, 0)
+    winner_slot = f'<div class="team winner"><span class="name">🏆 {e8_winner}</span></div>' if e8_winner else '<div class="team tbd">← Final Four</div>'
+    winner_col = f'''<div class="round final-slot">
+        <div class="round-label">Region Winner</div>
+        <div class="round-games"><div class="matchup"><div class="matchup-teams">{winner_slot}</div></div></div>
+    </div>'''
+
+    rounds_html = winner_col if mirrored else ""
+
+    for r in rounds:
         num_games = 8 // (2**r)
         matchups_html = ""
         for g in range(num_games):
@@ -89,48 +106,92 @@ def build_region_rounds(region):
             cmp_btn = ""
             if can_compare:
                 cmp_label = "▲" if is_expanded else "⚔"
+                # For mirrored, compare button goes on left of teams
                 cmp_btn = f'<button class="cmp-btn" onclick="sendClick(\'{cmp_payload}\')" title="Compare teams">{cmp_label}</button>'
-            matchups_html += f'''
-            <div class="matchup">
-                <div class="matchup-teams">
-                    {team_html(region, r, g, 0)}
-                    {team_html(region, r, g, 1)}
-                </div>
-                {cmp_btn}
-            </div>'''
+            if mirrored:
+                matchups_html += f'''
+                <div class="matchup matchup-mirror">
+                    {cmp_btn}
+                    <div class="matchup-teams">
+                        {team_html(region, r, g, 0, mirrored=True)}
+                        {team_html(region, r, g, 1, mirrored=True)}
+                    </div>
+                </div>'''
+            else:
+                matchups_html += f'''
+                <div class="matchup">
+                    <div class="matchup-teams">
+                        {team_html(region, r, g, 0)}
+                        {team_html(region, r, g, 1)}
+                    </div>
+                    {cmp_btn}
+                </div>'''
+
         rounds_html += f'''
-        <div class="round">
+        <div class="round {'round-mirror' if mirrored else ''}">
             <div class="round-label">{ROUND_NAMES[r]}</div>
             <div class="round-games">{matchups_html}</div>
         </div>'''
-    e8_winner = get_winner(region, 3, 0)
-    winner_slot = f'<div class="team winner"><span class="name">🏆 {e8_winner}</span></div>' if e8_winner else '<div class="team tbd">→ Final Four</div>'
-    rounds_html += f'''
-    <div class="round final-slot">
+
+    if not mirrored:
+        ws = f'<div class="team winner"><span class="name">🏆 {e8_winner}</span></div>' if e8_winner else '<div class="team tbd">→ Final Four</div>'
+        rounds_html += f'''<div class="round final-slot">
         <div class="round-label">Region Winner</div>
-        <div class="round-games"><div class="matchup"><div class="matchup-teams">{winner_slot}</div></div></div>
-    </div>'''
+        <div class="round-games"><div class="matchup"><div class="matchup-teams">
+            {ws}
+        </div></div></div></div>'''
+
     return rounds_html
 
+# Layout: East/South on left (normal), West/Midwest on right (mirrored)
+# Pairs for 2x2: top row = East(L) + West(R), bottom row = South(L) + Midwest(R)
+REGION_LAYOUT = [
+    ("East",    False),  # top-left,     flows →
+    ("West",    True),   # top-right,    flows ←
+    ("South",   False),  # bottom-left,  flows →
+    ("Midwest", True),   # bottom-right, flows ←
+]
+
 def build_bracket_html(regions):
-    """Build a full HTML doc for one or more regions displayed side by side."""
+    """Build a full HTML doc. If all 4 regions, renders as 2x2 mirrored grid."""
     if isinstance(regions, str):
         regions = [regions]
 
     CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto; padding: 8px; }
-.all-regions { display: flex; gap: 20px; min-width: max-content; }
+
+/* Single-region view */
+.single-region { display: flex; flex-direction: column; }
+
+/* 2x2 grid view */
+.grid-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.grid-row  { display: flex; flex-direction: row; align-items: flex-start; }
+.grid-row.top { border-bottom: 2px solid #1e3a5f; margin-bottom: 16px; padding-bottom: 12px; }
+
 .region-block { display: flex; flex-direction: column; }
-.region-title { font-family: 'Bebas Neue', cursive; font-size: 0.9rem; color: #f97316;
-                letter-spacing: 0.1em; margin-bottom: 6px; padding-left: 4px; border-left: 3px solid #f97316; padding-left: 6px; }
+.region-title-left {
+    font-family: 'Bebas Neue', cursive; font-size: 0.9rem; color: #f97316;
+    letter-spacing: 0.1em; margin-bottom: 6px;
+    border-left: 3px solid #f97316; padding-left: 6px;
+}
+.region-title-right {
+    font-family: 'Bebas Neue', cursive; font-size: 0.9rem; color: #f97316;
+    letter-spacing: 0.1em; margin-bottom: 6px;
+    border-right: 3px solid #f97316; padding-right: 6px;
+    text-align: right;
+}
 .bracket { display: flex; flex-direction: row; align-items: stretch; }
 .round { display: flex; flex-direction: column; min-width: 170px; }
+.round-mirror { display: flex; flex-direction: column; min-width: 170px; }
 .round-label { font-family: monospace; font-size: 10px; color: #f97316; text-transform: uppercase;
                letter-spacing: 0.1em; padding: 0 8px 8px 8px; text-align: center; white-space: nowrap; }
 .round-games { display: flex; flex-direction: column; flex: 1; justify-content: space-around; }
 .matchup { display: flex; flex-direction: row; align-items: center; flex: 1; padding: 3px 0; }
+.matchup-mirror { justify-content: flex-end; }
 .matchup-teams { display: flex; flex-direction: column; gap: 2px; }
+
+/* Normal (left) team slots */
 .team { display: flex; align-items: center; gap: 6px; width: 155px; height: 26px;
         padding: 0 8px; border-radius: 4px; border: 1px solid #2d4a6b;
         background: #112240; color: #e2e8f0; font-size: 11px;
@@ -141,21 +202,45 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
 .team.pickable { cursor: pointer; transition: all 0.1s; }
 .team.pickable:hover { background: #1a3255; border-color: #f97316; color: #f1f5f9; }
 .team.winner.pickable:hover { background: #143d22; border-color: #4ade80; }
+
+/* Mirrored (right) team slots — text right-aligned, seed on right */
+.team-mirror { display: flex; align-items: center; flex-direction: row-reverse; gap: 6px;
+               width: 155px; height: 26px; padding: 0 8px; border-radius: 4px;
+               border: 1px solid #2d4a6b; background: #112240; color: #e2e8f0;
+               font-size: 11px; white-space: nowrap; overflow: hidden;
+               font-family: 'DM Mono', monospace; }
+.team-mirror.tbd    { color: #334155; border-color: #1a2d45; border-style: dashed; background: #080f1c; }
+.team-mirror.winner { background: #0f2d1a; border-color: #22c55e; color: #22c55e; }
+.team-mirror.loser  { opacity: 0.35; }
+.team-mirror.pickable { cursor: pointer; transition: all 0.1s; }
+.team-mirror.pickable:hover { background: #1a3255; border-color: #f97316; color: #f1f5f9; }
+.team-mirror.winner.pickable:hover { background: #143d22; border-color: #4ade80; }
+
 .seed { font-size: 9px; color: #64748b; background: #1e3a5f; padding: 1px 4px;
         border-radius: 3px; min-width: 18px; text-align: center; flex-shrink: 0; }
 .name { overflow: hidden; text-overflow: ellipsis; }
 .cmp-btn { background: none; border: 1px solid #1e3a5f; color: #475569; cursor: pointer;
            font-size: 11px; padding: 2px 7px; border-radius: 3px; margin-left: 6px;
-           transition: all 0.1s; }
+           transition: all 0.1s; flex-shrink: 0; }
+.cmp-btn-left { margin-left: 0; margin-right: 6px; }
 .cmp-btn:hover { border-color: #f97316; color: #f97316; }
-.divider { width: 1px; background: #1e3a5f; margin: 0 8px; align-self: stretch; flex-shrink: 0; }
+.center-divider { width: 2px; background: linear-gradient(to bottom, transparent, #f97316 20%, #f97316 80%, transparent);
+                  margin: 0 12px; align-self: stretch; flex-shrink: 0; }
 """
 
-    inner = ""
-    for i, region in enumerate(regions):
-        if i > 0:
-            inner += '<div class="divider"></div>'
-        inner += f'<div class="region-block"><div class="region-title">{region}</div><div class="bracket">{build_region_rounds(region)}</div></div>'
+    # All 4 regions → 2x2 mirrored grid
+    if set(regions) == set(REGIONS) or regions == REGIONS:
+        top_row = _build_row("East", "West")
+        bot_row = _build_row("South", "Midwest")
+        inner = f'<div class="grid-2x2"><div class="grid-row top">{top_row}</div><div class="grid-row">{bot_row}</div></div>'
+    else:
+        # Single or arbitrary subset — just side by side
+        parts = []
+        for region in regions:
+            mirrored = dict(REGION_LAYOUT).get(region, False)
+            title_cls = "region-title-right" if mirrored else "region-title-left"
+            parts.append(f'<div class="region-block"><div class="{title_cls}">{region}</div><div class="bracket">{build_region_rounds(region, mirrored)}</div></div>')
+        inner = f'<div style="display:flex;gap:20px;">{"".join(parts)}</div>'
 
     return f"""<!DOCTYPE html>
 <html><head><style>{CSS}</style></head>
@@ -165,8 +250,23 @@ function sendClick(payload) {{
     window.parent.postMessage({{type: 'streamlit:setComponentValue', value: payload}}, '*');
 }}
 </script>
-<div class="all-regions">{inner}</div>
+{inner}
 </body></html>"""
+
+def _build_row(left_region, right_region):
+    """Build one horizontal pair: left region normal, right region mirrored, center divider."""
+    left_html  = build_region_rounds(left_region,  mirrored=False)
+    right_html = build_region_rounds(right_region, mirrored=True)
+    return f'''
+    <div class="region-block">
+        <div class="region-title-left">{left_region}</div>
+        <div class="bracket">{left_html}</div>
+    </div>
+    <div class="center-divider"></div>
+    <div class="region-block">
+        <div class="region-title-right">{right_region}</div>
+        <div class="bracket">{right_html}</div>
+    </div>'''
 
 def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
     if df_stats.empty: return
@@ -266,8 +366,9 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
 
 def render_region_tab(region, df_stats, all_regions=False):
     regions = REGIONS if all_regions else [region]
+    height  = 1420 if all_regions else 640
     html    = build_bracket_html(regions)
-    click   = components.html(html, height=620, scrolling=True)
+    click   = components.html(html, height=height, scrolling=True)
 
     if click and isinstance(click, str) and "|" in click:
         parts = click.split("|")
