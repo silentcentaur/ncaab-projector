@@ -257,6 +257,11 @@ MANUAL = {
     # Saint / St. schools
     "St. Mary's":         "Saint Mary's Gaels",
     "Saint Mary's":       "Saint Mary's Gaels",
+    "Saint Joseph's":     "Saint Joseph's Hawks",
+    "Saint Louis":        "Saint Louis Billikens",
+    "Saint Peter's":      "Saint Peter's Peacocks",
+    "Saint Francis":      "Saint Francis Red Flash",
+    "Loyola Marymount":   "Loyola Marymount Lions",
     "St. John's":         "St. John's Red Storm",
     "St. Bonaventure":    "St. Bonaventure Bonnies",
     "St. Joseph's":       "Saint Joseph's Hawks",
