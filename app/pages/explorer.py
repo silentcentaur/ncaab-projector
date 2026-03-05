@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
+import name_map as nm
 
 PLOT_THEME = dict(
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -105,10 +106,10 @@ def show():
             polar=dict(bgcolor="rgba(0,0,0,0)",
                 radialaxis=dict(visible=True,range=[0,100],gridcolor="#1e2d45",color="#64748b",ticksuffix="%"),
                 angularaxis=dict(gridcolor="#1e2d45",color="#94a3b8")))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     if not game_df.empty and "team" in game_df.columns:
-        tg = game_df[game_df["team"]==selected].copy()
+        tg = nm.get_team_games(game_df, df, selected)
         if not tg.empty:
             st.markdown("### Game Log")
             tg["date"]   = pd.to_datetime(tg["date"], errors="coerce")
@@ -124,9 +125,9 @@ def show():
             )
             fig2.update_layout(**PLOT_THEME, height=260,
                                xaxis_title="Date", yaxis_title="Point Margin", bargap=0.15)
-            st.plotly_chart(fig2, width="stretch")
+            st.plotly_chart(fig2, use_container_width=True)
             cols = [c for c in ["date","opponent","venue","points_for","points_against","margin","result"] if c in tg.columns]
-            st.dataframe(tg[cols].head(30), width="stretch", hide_index=True)
+            st.dataframe(tg[cols].head(30), use_container_width=True, hide_index=True)
 
     with st.expander("All Season Stats"):
-        st.dataframe(pd.DataFrame(row).T, width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame(row).T, use_container_width=True, hide_index=True)
