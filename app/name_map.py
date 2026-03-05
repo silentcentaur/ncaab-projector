@@ -97,6 +97,17 @@ MANUAL = {
     "North Florida":      "North Florida Ospreys",
     "Kennesaw St":        "Kennesaw State Owls",
     "Queens":             "Queens Royals",
+    "St. Mary's":         "Saint Mary's Gaels",
+    "Saint Mary's":       "Saint Mary's Gaels",
+    "St. John's":         "St. John's Red Storm",
+    "St. Bonaventure":    "St. Bonaventure Bonnies",
+    "St. Joseph's":       "Saint Joseph's Hawks",
+    "St. Louis":          "Saint Louis Billikens",
+    "Saint Louis":        "Saint Louis Billikens",
+    "St. Francis (PA)":   "Saint Francis Red Flash",
+    "St. Francis (NY)":   "St. Francis Brooklyn Terriers",
+    "St. Peter's":        "Saint Peter's Peacocks",
+    "Mount St. Mary's":   "Mount St. Mary's Mountaineers",
     "St. Thomas":         "St. Thomas Tommies",
 }
 
@@ -105,8 +116,10 @@ _MANUAL_INV = {v: k for k, v in MANUAL.items()}
 
 
 def _clean(name: str) -> str:
-    """Lowercase, strip common suffixes for fuzzy matching."""
+    """Lowercase, normalize saint/st., strip common suffixes for fuzzy matching."""
     name = str(name).lower().strip()
+    # Normalize "st." <-> "saint" so they match each other
+    name = name.replace("st. ", "saint ").replace("st.", "saint")
     for suffix in [" bulldogs"," blue devils"," tar heels"," wildcats"," bears",
                    " tigers"," eagles"," panthers"," hawks"," wolves"," lions",
                    " spartans"," trojans"," bruins"," ducks"," beavers"," huskies",
