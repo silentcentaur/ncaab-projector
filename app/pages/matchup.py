@@ -136,6 +136,11 @@ def show():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Model weights ─────────────────────────────────────────────────────────
+    # Initialize session state defaults on first load (must happen before sliders render)
+    for k, v in DEFAULTS.items():
+        if f"w_{k}" not in st.session_state:
+            st.session_state[f"w_{k}"] = v
+
     with st.expander("⚙️  Customize Prediction Model", expanded=False):
         st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.7rem;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem;">0 = ignore · 1 = default · 2 = double weight</div>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
@@ -155,6 +160,7 @@ def show():
             for k, v in DEFAULTS.items():
                 st.session_state[f"w_{k}"] = v
             st.rerun()
+
 
         active = {k:v for k,v in {"Off.Eff":w_oe,"Def.Eff":w_de,"eFG%":w_efg,
                                    "TOV%":w_tov,"ORB%":w_orb,"SOS":w_sos,
