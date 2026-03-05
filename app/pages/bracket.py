@@ -90,30 +90,55 @@ def render_region_col(region, df_stats, key_prefix=""):
             winner = get_winner(region, r, g)
 
             for slot, team in [(0, ta), (1, tb)]:
-                seed     = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
-                other    = get_team_in_slot(region, r, g, 1 - slot)
-                is_w     = winner == team and team is not None
-                is_l     = winner is not None and winner != team and team is not None
-                can_pick = team is not None and other is not None
+                seed  = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
+                other = get_team_in_slot(region, r, g, 1 - slot)
+                is_w  = winner == team and team is not None
+                is_l  = winner is not None and winner != team and team is not None
+
+                if not team:
+                    # Only show empty placeholder if matchup has at least one team
+                    if ta or tb:
+                        st.markdown('<div style="height:24px;border:1px dashed #1a2d45;border-radius:3px;margin:1px 0;background:#080f1c;"></div>', unsafe_allow_html=True)
+                    continue
+
+                can_pick = other is not None
+                seed_str = f"[{seed}] " if seed else ""
+                prefix   = "✓ " if is_w else ""
+                label    = f"{prefix}{seed_str}{team}"
+
+                if is_w:
+                    bg, bc, tc, op = "#0f2d1a", "#22c55e", "#22c55e", "1"
+                elif is_l:
+                    bg, bc, tc, op = "#080f1c", "#1a2d45", "#334155", "0.38"
+                else:
+                    bg, bc, tc, op = "#112240", "#2d4a6b", "#cbd5e1", "1"
 
                 if can_pick:
-                    # Use a tiny column trick: wide styled div + invisible pick button overlay
-                    c_div, c_btn = st.columns([10, 1])
-                    c_div.markdown(slot_div(team, seed, is_w, is_l), unsafe_allow_html=True)
-                    with c_btn:
-                        st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
-                        if st.button("›", key=f"p_{key_prefix}{region}_{r}_{g}_{slot}",
-                                     help=f"Pick {team}"):
-                            set_winner(region, r, g, team)
-                            st.rerun()
+                    # st.button styled via injected CSS to look like a slot
+                    clicked = st.button(label, key=f"p_{key_prefix}{region}_{r}_{g}_{slot}",
+                                        use_container_width=True, help="Click to pick")
+                    st.markdown(
+                        f'''<style>div[data-testid="stButton"]:has(button[kind="secondary"][data-testid*="p_{key_prefix}{region}_{r}_{g}_{slot}"]) button {{
+                            background:{bg}!important;border:1px solid {bc}!important;color:{tc}!important;
+                            opacity:{op}!important;font-size:11px!important;height:24px!important;
+                            min-height:24px!important;padding:0 8px!important;
+                            font-family:"DM Mono",monospace!important;box-shadow:none!important;
+                            text-align:left!important;
+                        }}
+                        div[data-testid="stButton"]:has(button[kind="secondary"][data-testid*="p_{key_prefix}{region}_{r}_{g}_{slot}"]) button:hover {{
+                            background:#1a3255!important;border-color:#f97316!important;color:#f1f5f9!important;
+                        }}</style>''', unsafe_allow_html=True)
+                    if clicked:
+                        set_winner(region, r, g, team)
+                        st.rerun()
                 else:
                     st.markdown(slot_div(team, seed, is_w, is_l), unsafe_allow_html=True)
 
-            # Compare + spacer
+            # Compare button — only show if both teams exist in this matchup
             if ta and tb:
                 exp    = st.session_state.expanded_matchup
                 is_exp = exp == (region, r, g)
-                c1, c2 = st.columns([10, 1])
+                _, c2 = st.columns([9, 1])
                 with c2:
                     if st.button("▲" if is_exp else "⚔", key=f"cmp_{key_prefix}{region}_{r}_{g}",
                                  help="Compare teams"):
