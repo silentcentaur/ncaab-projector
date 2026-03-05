@@ -73,7 +73,8 @@ def team_html(region, round_idx, game_idx, slot):
 
     return f'<div class="{cls}" onclick="{onclick}" title="{title}">{seed_html}<span class="name">{team}</span></div>'
 
-def build_bracket_html(region):
+def build_region_rounds(region):
+    """Build the rounds HTML for a single region (no wrapper)."""
     rounds_html = ""
     for r in range(4):
         num_games = 8 // (2**r)
@@ -89,7 +90,6 @@ def build_bracket_html(region):
             if can_compare:
                 cmp_label = "▲" if is_expanded else "⚔"
                 cmp_btn = f'<button class="cmp-btn" onclick="sendClick(\'{cmp_payload}\')" title="Compare teams">{cmp_label}</button>'
-
             matchups_html += f'''
             <div class="matchup">
                 <div class="matchup-teams">
@@ -98,13 +98,11 @@ def build_bracket_html(region):
                 </div>
                 {cmp_btn}
             </div>'''
-
         rounds_html += f'''
         <div class="round">
             <div class="round-label">{ROUND_NAMES[r]}</div>
             <div class="round-games">{matchups_html}</div>
         </div>'''
-
     e8_winner = get_winner(region, 3, 0)
     winner_slot = f'<div class="team winner"><span class="name">🏆 {e8_winner}</span></div>' if e8_winner else '<div class="team tbd">→ Final Four</div>'
     rounds_html += f'''
@@ -112,48 +110,63 @@ def build_bracket_html(region):
         <div class="round-label">Region Winner</div>
         <div class="round-games"><div class="matchup"><div class="matchup-teams">{winner_slot}</div></div></div>
     </div>'''
+    return rounds_html
+
+def build_bracket_html(regions):
+    """Build a full HTML doc for one or more regions displayed side by side."""
+    if isinstance(regions, str):
+        regions = [regions]
+
+    CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto; padding: 8px; }
+.all-regions { display: flex; gap: 20px; min-width: max-content; }
+.region-block { display: flex; flex-direction: column; }
+.region-title { font-family: 'Bebas Neue', cursive; font-size: 0.9rem; color: #f97316;
+                letter-spacing: 0.1em; margin-bottom: 6px; padding-left: 4px; border-left: 3px solid #f97316; padding-left: 6px; }
+.bracket { display: flex; flex-direction: row; align-items: stretch; }
+.round { display: flex; flex-direction: column; min-width: 170px; }
+.round-label { font-family: monospace; font-size: 10px; color: #f97316; text-transform: uppercase;
+               letter-spacing: 0.1em; padding: 0 8px 8px 8px; text-align: center; white-space: nowrap; }
+.round-games { display: flex; flex-direction: column; flex: 1; justify-content: space-around; }
+.matchup { display: flex; flex-direction: row; align-items: center; flex: 1; padding: 3px 0; }
+.matchup-teams { display: flex; flex-direction: column; gap: 2px; }
+.team { display: flex; align-items: center; gap: 6px; width: 155px; height: 26px;
+        padding: 0 8px; border-radius: 4px; border: 1px solid #2d4a6b;
+        background: #112240; color: #e2e8f0; font-size: 11px;
+        white-space: nowrap; overflow: hidden; font-family: 'DM Mono', monospace; }
+.team.tbd { color: #334155; border-color: #1a2d45; border-style: dashed; background: #080f1c; }
+.team.winner { background: #0f2d1a; border-color: #22c55e; color: #22c55e; }
+.team.loser  { opacity: 0.35; }
+.team.pickable { cursor: pointer; transition: all 0.1s; }
+.team.pickable:hover { background: #1a3255; border-color: #f97316; color: #f1f5f9; }
+.team.winner.pickable:hover { background: #143d22; border-color: #4ade80; }
+.seed { font-size: 9px; color: #64748b; background: #1e3a5f; padding: 1px 4px;
+        border-radius: 3px; min-width: 18px; text-align: center; flex-shrink: 0; }
+.name { overflow: hidden; text-overflow: ellipsis; }
+.cmp-btn { background: none; border: 1px solid #1e3a5f; color: #475569; cursor: pointer;
+           font-size: 11px; padding: 2px 7px; border-radius: 3px; margin-left: 6px;
+           transition: all 0.1s; }
+.cmp-btn:hover { border-color: #f97316; color: #f97316; }
+.divider { width: 1px; background: #1e3a5f; margin: 0 8px; align-self: stretch; flex-shrink: 0; }
+"""
+
+    inner = ""
+    for i, region in enumerate(regions):
+        if i > 0:
+            inner += '<div class="divider"></div>'
+        inner += f'<div class="region-block"><div class="region-title">{region}</div><div class="bracket">{build_region_rounds(region)}</div></div>'
 
     return f"""<!DOCTYPE html>
-<html>
-<head>
-<style>
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto; padding: 8px; }}
-.bracket {{ display: flex; flex-direction: row; align-items: stretch; gap: 0; min-width: max-content; }}
-.round {{ display: flex; flex-direction: column; min-width: 170px; }}
-.round-label {{ font-family: monospace; font-size: 10px; color: #f97316; text-transform: uppercase;
-               letter-spacing: 0.1em; padding: 0 8px 8px 8px; text-align: center; white-space: nowrap; }}
-.round-games {{ display: flex; flex-direction: column; flex: 1; justify-content: space-around; }}
-.matchup {{ display: flex; flex-direction: row; align-items: center; flex: 1; padding: 3px 0; }}
-.matchup-teams {{ display: flex; flex-direction: column; gap: 2px; }}
-.team {{ display: flex; align-items: center; gap: 6px; width: 155px; height: 26px;
-         padding: 0 8px; border-radius: 4px; border: 1px solid #2d4a6b;
-         background: #112240; color: #e2e8f0; font-size: 11px;
-         white-space: nowrap; overflow: hidden; font-family: 'DM Mono', monospace; }}
-.team.tbd {{ color: #334155; border-color: #1a2d45; border-style: dashed; background: #080f1c; }}
-.team.winner {{ background: #0f2d1a; border-color: #22c55e; color: #22c55e; }}
-.team.loser  {{ opacity: 0.35; }}
-.team.pickable {{ cursor: pointer; transition: all 0.1s; }}
-.team.pickable:hover {{ background: #1a3255; border-color: #f97316; color: #f1f5f9; }}
-.team.winner.pickable:hover {{ background: #143d22; border-color: #4ade80; }}
-.seed {{ font-size: 9px; color: #64748b; background: #1e3a5f; padding: 1px 4px;
-         border-radius: 3px; min-width: 18px; text-align: center; flex-shrink: 0; }}
-.name {{ overflow: hidden; text-overflow: ellipsis; }}
-.cmp-btn {{ background: none; border: 1px solid #1e3a5f; color: #475569; cursor: pointer;
-            font-size: 11px; padding: 2px 7px; border-radius: 3px; margin-left: 6px;
-            transition: all 0.1s; }}
-.cmp-btn:hover {{ border-color: #f97316; color: #f97316; }}
-</style>
-</head>
+<html><head><style>{CSS}</style></head>
 <body>
 <script>
 function sendClick(payload) {{
     window.parent.postMessage({{type: 'streamlit:setComponentValue', value: payload}}, '*');
 }}
 </script>
-<div class="bracket">{rounds_html}</div>
-</body>
-</html>"""
+<div class="all-regions">{inner}</div>
+</body></html>"""
 
 def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
     if df_stats.empty: return
@@ -251,9 +264,10 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
         st.session_state.expanded_matchup = (region, round_idx, game_idx)
         st.rerun()
 
-def render_region_tab(region, df_stats):
-    html  = build_bracket_html(region)
-    click = components.html(html, height=600, scrolling=True)
+def render_region_tab(region, df_stats, all_regions=False):
+    regions = REGIONS if all_regions else [region]
+    html    = build_bracket_html(regions)
+    click   = components.html(html, height=620, scrolling=True)
 
     if click and isinstance(click, str) and "|" in click:
         parts = click.split("|")
@@ -271,16 +285,18 @@ def render_region_tab(region, df_stats):
             st.rerun()
 
     exp = st.session_state.expanded_matchup
-    if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
-        _, r_idx, g_idx = exp
-        t_a = get_team_in_slot(region, r_idx, g_idx, 0)
-        t_b = get_team_in_slot(region, r_idx, g_idx, 1)
-        if t_a and t_b:
-            st.markdown("---")
-            if st.button("✕ Close", key=f"close_cmp_{region}"):
-                st.session_state.expanded_matchup = None
-                st.rerun()
-            render_comparison_panel(t_a, t_b, region, r_idx, g_idx, df_stats)
+    if exp and isinstance(exp, tuple) and len(exp) == 3:
+        exp_region, r_idx, g_idx = exp
+        if exp_region in regions:
+            t_a = get_team_in_slot(exp_region, r_idx, g_idx, 0)
+            t_b = get_team_in_slot(exp_region, r_idx, g_idx, 1)
+            if t_a and t_b:
+                st.markdown("---")
+                close_key = "close_cmp_all" if all_regions else f"close_cmp_{region}"
+                if st.button("✕ Close", key=close_key):
+                    st.session_state.expanded_matchup = None
+                    st.rerun()
+                render_comparison_panel(t_a, t_b, exp_region, r_idx, g_idx, df_stats)
 
 def render_final_four(df_stats):
     st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:#f97316;letter-spacing:0.1em;text-align:center;">🏆 FINAL FOUR & CHAMPIONSHIP</div>', unsafe_allow_html=True)
@@ -351,9 +367,11 @@ def show():
             nm.build(df_stats["team"].dropna().tolist(),
                      game_df["team"].dropna().unique().tolist())
 
-    tabs = st.tabs(REGIONS + ["🏆 Final Four"])
+    tabs = st.tabs(["🏀 All Regions"] + REGIONS + ["🏆 Final Four"])
+    with tabs[0]:
+        render_region_tab("East", df_stats, all_regions=True)
     for i, region in enumerate(REGIONS):
-        with tabs[i]:
+        with tabs[i + 1]:
             render_region_tab(region, df_stats)
-    with tabs[4]:
+    with tabs[5]:
         render_final_four(df_stats)
