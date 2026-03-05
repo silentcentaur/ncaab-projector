@@ -248,20 +248,14 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
     return f"""<!DOCTYPE html>
 <html><head><style>{CSS}</style></head>
 <body>
+<script src="https://unpkg.com/streamlit-component-lib@2.0.0/dist/index.js"></script>
 <script>
+// Initialize Streamlit component
+window.addEventListener("load", function() {{
+    Streamlit.setFrameHeight(document.body.scrollHeight);
+}});
 function sendClick(payload) {{
-    // Approach 1: postMessage to Streamlit (works in some versions)
-    window.parent.postMessage({{type: 'streamlit:setComponentValue', value: payload}}, '*');
-    // Approach 2: Modify parent URL query params and reload
-    try {{
-        var parentUrl = new URL(window.parent.location.href);
-        parentUrl.searchParams.set('bclick', encodeURIComponent(payload));
-        window.parent.history.pushState({{}}, '', parentUrl.toString());
-        window.parent.location.reload();
-    }} catch(e) {{
-        // Cross-origin fallback: navigate iframe src with payload in hash
-        window.location.hash = encodeURIComponent(payload);
-    }}
+    Streamlit.setComponentValue(payload);
 }}
 </script>
 {inner}
@@ -282,7 +276,7 @@ def _build_row(left_region, right_region):
         <div class="bracket">{right_html}</div>
     </div>'''
 
-def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
+def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats, tab_prefix=""):
     if df_stats.empty: return
     ra_rows = df_stats[df_stats["team"] == team_a]
     rb_rows = df_stats[df_stats["team"] == team_b]
@@ -337,7 +331,7 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
             x=0.5, y=-0.15, orientation="h", xanchor="center"),
         margin=dict(l=50, r=50, t=30, b=50), height=300,
     )
-    rc1.plotly_chart(fig, use_container_width=True)
+    rc1.plotly_chart(fig, use_container_width=True, key=f"radar_{tab_prefix}_{region}_{round_idx}_{game_idx}")
 
     def gv(row, col, default=0.0):
         v = row.get(col)
@@ -369,11 +363,12 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
                 </div></div>""", unsafe_allow_html=True)
 
     pb1, pb2 = st.columns(2)
-    if pb1.button(f"🏆 Pick {team_a}", key=f"cmp_pick_{region}_{round_idx}_{game_idx}_0", use_container_width=True):
+    pfx = f"{tab_prefix}_{region}_{round_idx}_{game_idx}"
+    if pb1.button(f"🏆 Pick {team_a}", key=f"cmp_pick_{pfx}_0", use_container_width=True):
         set_winner(region, round_idx, game_idx, team_a)
         st.session_state.expanded_matchup = (region, round_idx, game_idx)
         st.rerun()
-    if pb2.button(f"🏆 Pick {team_b}", key=f"cmp_pick_{region}_{round_idx}_{game_idx}_1", use_container_width=True):
+    if pb2.button(f"🏆 Pick {team_b}", key=f"cmp_pick_{pfx}_1", use_container_width=True):
         set_winner(region, round_idx, game_idx, team_b)
         st.session_state.expanded_matchup = (region, round_idx, game_idx)
         st.rerun()
@@ -411,7 +406,9 @@ def render_region_tab(region, df_stats, all_regions=False):
                 if st.button("✕ Close", key=close_key):
                     st.session_state.expanded_matchup = None
                     st.rerun()
-                render_comparison_panel(t_a, t_b, exp_region, r_idx, g_idx, df_stats)
+                # Use tab_prefix to avoid duplicate element IDs across tabs
+                tab_prefix = "all" if all_regions else region
+                render_comparison_panel(t_a, t_b, exp_region, r_idx, g_idx, df_stats, tab_prefix=tab_prefix)
 
 def render_final_four(df_stats):
     st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:#f97316;letter-spacing:0.1em;text-align:center;">🏆 FINAL FOUR & CHAMPIONSHIP</div>', unsafe_allow_html=True)
@@ -507,6 +504,8 @@ def show():
         render_region_tab("East", df_stats, all_regions=True)
     for i, region in enumerate(REGIONS):
         with tabs[i + 1]:
-            render_region_tab(region, df_stats)
+            # Don't render comparison here if it's already shown in All Regions tab
+            # (avoids duplicate element IDs from plotly_chart)
+            render_region_tab(region, df_stats, all_regions=False)
     with tabs[5]:
         render_final_four(df_stats)
