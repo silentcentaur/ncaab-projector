@@ -40,7 +40,14 @@ div[data-baseweb="popover"] { background-color: #112240 !important; }
 </style>
 """
 
+SEEDS_VERSION = "2026-v2"  # bump this to force re-init when seeds change
+
 def init_bracket():
+    if st.session_state.get("seeds_version") != SEEDS_VERSION:
+        for key in ["bracket_teams", "bracket_picks", "final_four", "expanded_matchup"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state.seeds_version = SEEDS_VERSION
     if "bracket_teams" not in st.session_state:
         try:
             import sys, os
