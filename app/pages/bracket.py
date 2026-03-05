@@ -384,13 +384,13 @@ def show():
     tabs = st.tabs(["🏀 All Regions"] + REGIONS + ["🏆 Final Four"])
 
     with tabs[0]:
-        # Build all 4 regions as a single HTML block
+        import streamlit.components.v1 as components
         regions_html = PAGE_CSS + PAGE_JS
         regions_html += '<div class="regions">'
         for region in REGIONS:
             regions_html += build_region_html(region)
         regions_html += '</div>'
-        st.markdown(regions_html, unsafe_allow_html=True)
+        components.html(f"<html><body style='background:#0a0f1e;margin:0;padding:0'>{regions_html}</body></html>", height=2200, scrolling=True)
 
         exp = st.session_state.expanded_matchup
         if exp and isinstance(exp, tuple) and len(exp) == 3:
@@ -406,8 +406,9 @@ def show():
 
     for i, region in enumerate(REGIONS):
         with tabs[i + 1]:
+            import streamlit.components.v1 as components
             single_html = PAGE_CSS + PAGE_JS + build_region_html(region)
-            st.markdown(single_html, unsafe_allow_html=True)
+            components.html(f"<html><body style='background:#0a0f1e;margin:0;padding:0'>{single_html}</body></html>", height=2200, scrolling=True)
             exp = st.session_state.expanded_matchup
             if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
                 _, r_idx, g_idx = exp
