@@ -175,12 +175,21 @@ def fetch_and_store_game_history(sb: Client):
     existing_ids = _get_all_ids(sb, "game_history")
     log.info(f"  {len(existing_ids)} games already in database — will skip these")
 
-    # On nightly runs, only scan last 3 days (catches late finishers + today)
     today    = date.today()
     end      = min(today, SEASON_END)
     if len(existing_ids) > 100:
-        # Already have bulk data — only scan recent dates
-        start = max(SEASON_START, end - timedelta(days=3))
+        # Scan from the most recent stored game date (catches all missed games)
+        resp_last = (sb.table("game_history")
+                       .select("date")
+                       .eq("season", SEASON)
+                       .order("date", desc=True)
+                       .limit(1)
+                       .execute())
+        if resp_last.data and resp_last.data[0].get("date"):
+            last_date = date.fromisoformat(resp_last.data[0]["date"][:10])
+            start = max(SEASON_START, last_date - timedelta(days=1))  # 1 day overlap for safety
+        else:
+            start = max(SEASON_START, end - timedelta(days=7))
         log.info(f"  Incremental mode: scanning {start} → {end}")
     else:
         start = SEASON_START
