@@ -27,29 +27,43 @@ def avg_margin(games: pd.DataFrame, n: int = 10) -> float:
     return float(games["margin"].mean()) if not games["margin"].isna().all() else 0.0
 
 def compute_win_prob(ra, rb, venue, weights, games_a, games_b):
-    def g(row, col, default=0.0):
+    def g(row, col):
         v = row.get(col)
-        return float(v) if v is not None and not pd.isna(v) else default
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
 
-    oe_diff     = g(ra,"adj_oe",100)  - g(rb,"adj_oe",100)
-    de_diff     = g(rb,"adj_de",100)  - g(ra,"adj_de",100)
-    efg_diff    = g(ra,"efg_pct")     - g(rb,"efg_pct")
-    tov_diff    = g(rb,"tov_pct")     - g(ra,"tov_pct")
-    orb_diff    = g(ra,"orb_pct")     - g(rb,"orb_pct")
-    sos_diff    = g(ra,"sos_oe")      - g(rb,"sos_oe")
+    def diff(va, vb, flip=False):
+        """Return va-vb (or vb-va if flip), or None if either is missing/zero."""
+        if va is None or vb is None: return None
+        if va == 0.0 and vb == 0.0: return None  # both zero = bad data
+        return (vb - va) if flip else (va - vb)
+
+    oe_a = g(ra,"adj_oe"); oe_b = g(rb,"adj_oe")
+    de_a = g(ra,"adj_de"); de_b = g(rb,"adj_de")
+
+    oe_diff     = (oe_a - oe_b)   if oe_a and oe_b else 0.0
+    de_diff     = (de_b - de_a)   if de_a and de_b else 0.0
+    efg_diff    = diff(g(ra,"efg_pct"), g(rb,"efg_pct"))
+    tov_diff    = diff(g(ra,"tov_pct"), g(rb,"tov_pct"), flip=True)
+    orb_diff    = diff(g(ra,"orb_pct"), g(rb,"orb_pct"))
+    sos_diff    = diff(g(ra,"sos_oe"),  g(rb,"sos_oe"))
     form_diff   = recent_form_score(games_a) - recent_form_score(games_b)
     margin_diff = avg_margin(games_a)        - avg_margin(games_b)
     hca         = {"Home":3.5,"Neutral":0.0,"Away":-3.5}[venue]
 
     score = (
-        weights["oe"]     * oe_diff     * 0.15 +
-        weights["de"]     * de_diff     * 0.15 +
-        weights["efg"]    * efg_diff    * 8.0  +
-        weights["tov"]    * tov_diff    * 8.0  +
-        weights["orb"]    * orb_diff    * 5.0  +
-        weights["sos"]    * sos_diff    * 0.05 +
-        weights["form"]   * form_diff   * 1.5  +
-        weights["margin"] * margin_diff * 0.08 +
+        weights["oe"]     * oe_diff                          * 0.15 +
+        weights["de"]     * de_diff                          * 0.15 +
+        weights["efg"]    * (efg_diff or 0.0)                * 8.0  +
+        weights["tov"]    * (tov_diff or 0.0)                * 8.0  +
+        weights["orb"]    * (orb_diff or 0.0)                * 5.0  +
+        weights["sos"]    * (sos_diff or 0.0)                * 0.05 +
+        weights["form"]   * form_diff                        * 1.5  +
+        weights["margin"] * margin_diff                      * 0.08 +
         hca * 0.15
     )
     prob = logistic(score)
@@ -60,7 +74,14 @@ def expected_score(oe, de, opp_oe, opp_de, tempo, opp_tempo):
     return round(((oe + opp_de) / 2) / 100 * t, 1), round(((opp_oe + de) / 2) / 100 * t, 1)
 
 def stat_bar(label, va, vb, higher_is_better=True, fmt=".2f"):
-    if va is None or vb is None or pd.isna(va) or pd.isna(vb): return
+    if va is None or vb is None: 
+        st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#334155;margin-bottom:0.75rem;">{label}: no data available</div>', unsafe_allow_html=True)
+        return
+    if pd.isna(va) or pd.isna(vb): return
+    # Treat 0.0 for both as missing data (bad ESPN box score)
+    if va == 0.0 and vb == 0.0:
+        st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#334155;margin-bottom:0.75rem;">{label}: no data available</div>', unsafe_allow_html=True)
+        return
     total = abs(va) + abs(vb)
     if total == 0: return
     tp     = abs(va) / total * 100

@@ -220,7 +220,7 @@ def _upsert_game_rows(sb: Client, rows: list):
 
 # ── 3. Four Factors (ESPN game summary box scores) ────────────────────────────
 
-def _parse_made_att(statistics: list, name: str) -> tuple[float, float]:
+def _parse_made_att(statistics: list, name: str) -> tuple[float | None, float | None]:
     for s in statistics:
         if s.get("name") == name:
             val = s.get("displayValue", "")
@@ -230,34 +230,48 @@ def _parse_made_att(statistics: list, name: str) -> tuple[float, float]:
                     return float(m), float(a)
                 except ValueError:
                     pass
-    return 0.0, 0.0
+    return None, None
 
-def _stat(statistics: list, name: str) -> float:
+def _stat(statistics: list, name: str) -> float | None:
     for s in statistics:
         if s.get("name") == name:
             try:
                 return float(s["displayValue"])
             except (ValueError, KeyError):
                 pass
-    return 0.0
+    return None
+
+def _has_real_data(statistics: list) -> bool:
+    """Return True only if the stats list has meaningful box score data."""
+    fgm, fga = _parse_made_att(statistics, "fieldGoalsMade-fieldGoalsAttempted")
+    return fga is not None and fga > 0
 
 def calc_four_factors(stats: list, opp_stats: list) -> dict:
+    # If either team has no real box score data, return all None
+    if not _has_real_data(stats) or not _has_real_data(opp_stats):
+        return {k: None for k in ["efg_pct","tov_pct","orb_pct","ftr",
+                                   "opp_efg_pct","opp_tov_pct","opp_orb_pct","opp_ftr"]}
+
     fgm,  fga  = _parse_made_att(stats, "fieldGoalsMade-fieldGoalsAttempted")
     tpm,  _    = _parse_made_att(stats, "threePointFieldGoalsMade-threePointFieldGoalsAttempted")
     _,    fta  = _parse_made_att(stats, "freeThrowsMade-freeThrowsAttempted")
-    tov        = _stat(stats, "totalTurnovers")
-    orb        = _stat(stats, "offensiveRebounds")
-    drb        = _stat(stats, "defensiveRebounds")
+    tov        = _stat(stats, "totalTurnovers") or 0.0
+    orb        = _stat(stats, "offensiveRebounds") or 0.0
+    drb        = _stat(stats, "defensiveRebounds") or 0.0
+    fgm  = fgm  or 0.0; fga  = fga  or 0.0
+    tpm  = tpm  or 0.0; fta  = fta  or 0.0
 
     opp_fgm, opp_fga = _parse_made_att(opp_stats, "fieldGoalsMade-fieldGoalsAttempted")
     opp_tpm, _       = _parse_made_att(opp_stats, "threePointFieldGoalsMade-threePointFieldGoalsAttempted")
     _, opp_fta       = _parse_made_att(opp_stats, "freeThrowsMade-freeThrowsAttempted")
-    opp_tov          = _stat(opp_stats, "totalTurnovers")
-    opp_orb          = _stat(opp_stats, "offensiveRebounds")
-    opp_drb          = _stat(opp_stats, "defensiveRebounds")
+    opp_tov          = _stat(opp_stats, "totalTurnovers") or 0.0
+    opp_orb          = _stat(opp_stats, "offensiveRebounds") or 0.0
+    opp_drb          = _stat(opp_stats, "defensiveRebounds") or 0.0
+    opp_fgm = opp_fgm or 0.0; opp_fga = opp_fga or 0.0
+    opp_tpm = opp_tpm or 0.0; opp_fta = opp_fta or 0.0
 
     def safe(num, den):
-        return round(num / den, 4) if den > 0 else None
+        return round(num / den, 4) if den and den > 0 else None
 
     return {
         "efg_pct":     safe(fgm + 0.5 * tpm,  fga),
