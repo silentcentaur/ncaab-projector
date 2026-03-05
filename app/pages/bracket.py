@@ -42,7 +42,16 @@ div[data-baseweb="popover"] { background-color: #112240 !important; }
 
 def init_bracket():
     if "bracket_teams" not in st.session_state:
-        st.session_state.bracket_teams = {r: {s: None for s in SEEDS} for r in REGIONS}
+        try:
+            import sys, os
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+            from bracket_seeds import BRACKET_2026
+            st.session_state.bracket_teams = {
+                r: {s: BRACKET_2026.get(r, {}).get(s) for s in SEEDS}
+                for r in REGIONS
+            }
+        except Exception:
+            st.session_state.bracket_teams = {r: {s: None for s in SEEDS} for r in REGIONS}
     if "bracket_picks" not in st.session_state:
         st.session_state.bracket_picks = {r: {} for r in REGIONS}
     if "final_four" not in st.session_state:
