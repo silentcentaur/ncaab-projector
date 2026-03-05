@@ -118,7 +118,7 @@ def fetch_games_for_date(d: date) -> list[dict]:
     date_str = d.strftime("%Y%m%d")
     try:
         resp = requests.get(ESPN_SCOREBOARD,
-                            params={"dates": date_str, "limit": 100},
+                            params={"dates": date_str, "limit": 200, "groups": "50"},
                             timeout=15)
         resp.raise_for_status()
         data = resp.json()
