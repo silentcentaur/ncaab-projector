@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SEASON = 2026
+PAGE   = 1000   # Supabase default row limit
 
 @st.cache_resource
 def get_client() -> Client:
@@ -24,7 +25,24 @@ def get_client() -> Client:
     return create_client(url, key)
 
 
-@st.cache_data(ttl=300)   # cache for 5 minutes
+def _paginate(sb: Client, table: str, season: int) -> list:
+    """Fetch ALL rows from a table, paginating past Supabase's 1000-row limit."""
+    all_rows = []
+    offset = 0
+    while True:
+        resp = (sb.table(table)
+                  .select("*")
+                  .eq("season", season)
+                  .range(offset, offset + PAGE - 1)
+                  .execute())
+        all_rows.extend(resp.data)
+        if len(resp.data) < PAGE:
+            break
+        offset += PAGE
+    return all_rows
+
+
+@st.cache_data(ttl=300)
 def get_team_data() -> pd.DataFrame:
     sb = get_client()
     resp = sb.table("team_stats").select("*").eq("season", SEASON).execute()
@@ -39,15 +57,13 @@ def get_team_data() -> pd.DataFrame:
 @st.cache_data(ttl=300)
 def get_game_history() -> pd.DataFrame:
     sb = get_client()
-    resp = sb.table("game_history").select("*").eq("season", SEASON).execute()
-    return pd.DataFrame(resp.data)
+    return pd.DataFrame(_paginate(sb, "game_history", SEASON))
 
 
 @st.cache_data(ttl=300)
 def get_adv_history() -> pd.DataFrame:
     sb = get_client()
-    resp = sb.table("adv_game_history").select("*").eq("season", SEASON).execute()
-    return pd.DataFrame(resp.data)
+    return pd.DataFrame(_paginate(sb, "adv_game_history", SEASON))
 
 
 @st.cache_data(ttl=300)

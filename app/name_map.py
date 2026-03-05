@@ -213,6 +213,7 @@ def enrich_game_df(game_df: pd.DataFrame, team_df: pd.DataFrame) -> pd.DataFrame
 def get_team_games(game_df: pd.DataFrame, team_df: pd.DataFrame, bart_name: str) -> pd.DataFrame:
     """
     Get all games for a BartTorvik team name from the ESPN game history.
+    Always rebuilds the map with the full dataset to avoid stale cache issues.
     """
     if game_df.empty:
         return pd.DataFrame()
@@ -220,10 +221,19 @@ def get_team_games(game_df: pd.DataFrame, team_df: pd.DataFrame, bart_name: str)
     gdf = game_df.copy()
     gdf.columns = [c.lower() for c in gdf.columns]
 
-    if not _b2e:
-        bart_names = team_df["team"].dropna().tolist() if not team_df.empty else []
-        espn_names = gdf["team"].dropna().unique().tolist()
-        build(bart_names, espn_names)
+    # Always rebuild with full data — cheap operation, avoids stale map issues
+    bart_names = team_df["team"].dropna().tolist() if not team_df.empty else []
+    espn_names = gdf["team"].dropna().unique().tolist()
+    build(bart_names, espn_names)
 
     espn_name = to_espn(bart_name)
+    
+    # If direct match fails, try case-insensitive first-word match as fallback
+    if espn_name == bart_name:
+        bart_first = bart_name.lower().split()[0]
+        for en in espn_names:
+            if en.lower().startswith(bart_first):
+                espn_name = en
+                break
+
     return gdf[gdf["team"] == espn_name].copy()
