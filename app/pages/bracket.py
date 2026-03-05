@@ -1,7 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
-import numpy as np
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
@@ -10,7 +8,8 @@ import name_map as nm
 REGIONS = ["East", "West", "South", "Midwest"]
 SEEDS   = list(range(1, 17))
 FIRST_ROUND_PAIRS = [(1,16),(8,9),(5,12),(4,13),(6,11),(3,14),(7,10),(2,15)]
-SEEDS_VERSION = "2026-v4"
+SEEDS_VERSION = "2026-v5"
+ROUND_NAMES   = ["R64", "R32", "S16", "E8"]
 
 # ── State helpers ─────────────────────────────────────────────────────────────
 def init_bracket():
@@ -28,21 +27,15 @@ def init_bracket():
             }
         except Exception:
             st.session_state.bracket_teams = {r: {s: None for s in SEEDS} for r in REGIONS}
-    if "bracket_picks" not in st.session_state:
-        st.session_state.bracket_picks = {r: {} for r in REGIONS}
-    if "final_four" not in st.session_state:
-        st.session_state.final_four = {}
-    if "expanded_matchup" not in st.session_state:
-        st.session_state.expanded_matchup = None
-    if "bracket_click" not in st.session_state:
-        st.session_state.bracket_click = None
+    if "bracket_picks"    not in st.session_state: st.session_state.bracket_picks    = {r: {} for r in REGIONS}
+    if "final_four"       not in st.session_state: st.session_state.final_four       = {}
+    if "expanded_matchup" not in st.session_state: st.session_state.expanded_matchup = None
 
 def get_winner(region, round_idx, game_idx):
     return st.session_state.bracket_picks.get(region,{}).get(round_idx,{}).get(game_idx)
 
 def set_winner(region, round_idx, game_idx, team):
-    bp = st.session_state.bracket_picks
-    bp.setdefault(region, {}).setdefault(round_idx, {})[game_idx] = team
+    st.session_state.bracket_picks.setdefault(region,{}).setdefault(round_idx,{})[game_idx] = team
     clear_downstream(region, round_idx, game_idx)
 
 def clear_downstream(region, round_idx, game_idx):
@@ -54,161 +47,70 @@ def clear_downstream(region, round_idx, game_idx):
 
 def get_team_in_slot(region, round_idx, game_idx, slot):
     if round_idx == 0:
-        seed = FIRST_ROUND_PAIRS[game_idx][slot]
-        return st.session_state.bracket_teams[region].get(seed)
+        return st.session_state.bracket_teams[region].get(FIRST_ROUND_PAIRS[game_idx][slot])
     return get_winner(region, round_idx - 1, game_idx * 2 + slot)
 
-# ── HTML bracket builder ──────────────────────────────────────────────────────
-def team_html(region, round_idx, game_idx, slot):
-    team   = get_team_in_slot(region, round_idx, game_idx, slot)
-    winner = get_winner(region, round_idx, game_idx)
-    other  = get_team_in_slot(region, round_idx, game_idx, 1 - slot)
-    seed   = FIRST_ROUND_PAIRS[game_idx][slot] if round_idx == 0 else None
+# ── Render region as a vertical round-by-round list using st.button ───────────
+def render_region_col(region, df_stats):
+    """Render one region as a compact vertical bracket using st.buttons."""
+    st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:#f97316;letter-spacing:0.1em;margin-bottom:4px;">{region}</div>', unsafe_allow_html=True)
 
-    if not team:
-        return '<div class="team tbd">TBD</div>'
-
-    is_winner = winner == team
-    is_loser  = winner is not None and winner != team
-    can_pick  = other is not None
-
-    cls = "team"
-    if is_winner: cls += " winner"
-    elif is_loser: cls += " loser"
-    if can_pick:  cls += " pickable"
-
-    seed_html = f'<span class="seed">{seed}</span>' if seed else ''
-    pick_payload = f"{region}|{round_idx}|{game_idx}|{slot}|pick"
-    cmp_payload  = f"{region}|{round_idx}|{game_idx}|cmp"
-
-    onclick = f"sendClick('{pick_payload}')" if can_pick else ""
-
-    return f'''<div class="{cls}" onclick="{onclick}" title="{'Click to pick winner' if can_pick else ''}">
-        {seed_html}<span class="name">{team}</span>
-    </div>'''
-
-def build_bracket_html(region):
-    """Build the full bracket HTML for one region."""
-    round_names = ["Round of 64", "Round of 32", "Sweet 16", "Elite 8"]
-    num_rounds  = 4
-
-    rounds_html = ""
-    for r in range(num_rounds):
+    for r in range(4):
         num_games = 8 // (2 ** r)
-        matchups_html = ""
+        st.markdown(f'<div style="font-family:monospace;font-size:0.55rem;color:#475569;text-transform:uppercase;letter-spacing:0.08em;border-left:2px solid #f97316;padding-left:4px;margin:4px 0 2px 0;">{ROUND_NAMES[r]}</div>', unsafe_allow_html=True)
         for g in range(num_games):
-            team_a = team_html(region, r, g, 0)
-            team_b = team_html(region, r, g, 1)
-
             ta = get_team_in_slot(region, r, g, 0)
             tb = get_team_in_slot(region, r, g, 1)
-            can_compare = ta is not None and tb is not None
-            cmp_payload = f"{region}|{r}|{g}|cmp"
-            exp = st.session_state.expanded_matchup
-            is_expanded = exp == (region, r, g)
-            cmp_btn = ""
-            if can_compare:
-                cmp_label = "▲" if is_expanded else "▼"
-                cmp_btn = f'<button class="cmp-btn" onclick="sendClick(\'{cmp_payload}\')" title="Compare teams">{cmp_label}</button>'
+            winner = get_winner(region, r, g)
 
-            matchups_html += f'''
-            <div class="matchup">
-                <div class="matchup-teams">
-                    {team_a}
-                    {team_b}
-                </div>
-                {cmp_btn}
-            </div>'''
+            for slot, team in [(0, ta), (1, tb)]:
+                seed = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
+                if not team:
+                    st.markdown('<div style="height:22px;border:1px dashed #1a2d45;border-radius:3px;margin:1px 0;background:#080f1c;"></div>', unsafe_allow_html=True)
+                    continue
 
-        rounds_html += f'''
-        <div class="round">
-            <div class="round-label">{round_names[r]}</div>
-            <div class="round-games">{matchups_html}</div>
-        </div>'''
+                is_w = winner == team
+                is_l = winner is not None and winner != team
+                other = get_team_in_slot(region, r, g, 1 - slot)
+                can_pick = other is not None
 
-    # Final slot (region winner)
-    e8_winner = get_winner(region, 3, 0)
-    winner_html = f'<div class="team winner"><span class="name">{e8_winner}</span></div>' if e8_winner else '<div class="team tbd">→ Final Four</div>'
-    rounds_html += f'''
-    <div class="round final-slot">
-        <div class="round-label">Region Winner</div>
-        <div class="round-games"><div class="matchup"><div class="matchup-teams">{winner_html}</div></div></div>
-    </div>'''
+                seed_str = f"[{seed}] " if seed else ""
+                label = f"{'✓ ' if is_w else ''}{seed_str}{team[:16]}"
 
-    css = """
-    <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto; }
-    .bracket { display: flex; flex-direction: row; align-items: stretch; gap: 0; padding: 16px 8px; min-width: max-content; }
-    .round { display: flex; flex-direction: column; min-width: 160px; }
-    .round-label { font-family: monospace; font-size: 10px; color: #f97316; text-transform: uppercase;
-                   letter-spacing: 0.1em; padding: 0 8px 8px 8px; text-align: center; white-space: nowrap; }
-    .round-games { display: flex; flex-direction: column; flex: 1; justify-content: space-around; }
+                btn_style = ""
+                if is_w:
+                    btn_style = "color:#22c55e;"
+                elif is_l:
+                    btn_style = "opacity:0.4;"
 
-    .matchup { display: flex; flex-direction: row; align-items: center; position: relative; flex: 1;
-               justify-content: flex-start; }
-    .matchup-teams { display: flex; flex-direction: column; gap: 2px; position: relative; }
+                if can_pick:
+                    clicked = st.button(label, key=f"p_{region}_{r}_{g}_{slot}",
+                                        use_container_width=True)
+                    if clicked:
+                        set_winner(region, r, g, team)
+                        st.rerun()
+                else:
+                    st.markdown(
+                        f'<div style="font-size:11px;padding:3px 8px;border:1px solid #2d4a6b;'
+                        f'border-radius:3px;background:#112240;color:#e2e8f0;margin:1px 0;'
+                        f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;{btn_style}">'
+                        f'{label}</div>', unsafe_allow_html=True)
 
-    /* Connector lines via pseudo-elements */
-    .matchup-teams::after {
-        content: '';
-        position: absolute;
-        right: -20px;
-        top: 50%;
-        width: 20px;
-        height: 1px;
-        background: #1e3a5f;
-    }
+            # Compare button between team pairs
+            if ta and tb:
+                exp = st.session_state.expanded_matchup
+                is_exp = exp == (region, r, g)
+                cmp_label = "▲" if is_exp else "⚔"
+                if st.button(cmp_label, key=f"cmp_{region}_{r}_{g}", help="Compare teams"):
+                    st.session_state.expanded_matchup = None if is_exp else (region, r, g)
+                    st.rerun()
 
-    .team { display: flex; align-items: center; gap: 6px; width: 150px; height: 26px;
-             padding: 0 8px; border-radius: 4px; border: 1px solid #2d4a6b;
-             background: #112240; color: #e2e8f0; font-size: 12px; transition: all 0.1s;
-             white-space: nowrap; overflow: hidden; }
-    .team.tbd { color: #334155; border-color: #1a2d45; border-style: dashed; background: #080f1c; }
-    .team.winner { background: #0f2d1a; border-color: #22c55e; color: #22c55e; }
-    .team.loser  { opacity: 0.35; }
-    .team.pickable { cursor: pointer; }
-    .team.pickable:hover { background: #1a3255; border-color: #f97316; color: #f1f5f9; }
-    .team.winner.pickable:hover { background: #143d22; border-color: #4ade80; }
+            st.markdown('<div style="height:2px;"></div>', unsafe_allow_html=True)
 
-    .seed { font-size: 10px; color: #64748b; background: #1e3a5f; padding: 1px 4px;
-            border-radius: 3px; min-width: 18px; text-align: center; flex-shrink: 0; }
-    .name { overflow: hidden; text-overflow: ellipsis; }
-
-    .cmp-btn { background: none; border: 1px solid #1e3a5f; color: #475569; cursor: pointer;
-               font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-left: 4px;
-               transition: all 0.1s; }
-    .cmp-btn:hover { border-color: #f97316; color: #f97316; }
-
-    /* Bracket connector lines between rounds */
-    .round:not(.final-slot) .round-games { position: relative; }
-    .round:not(:last-child) .matchup { padding-right: 20px; }
-
-    /* Draw the vertical + horizontal bracket connectors */
-    .connector-wrap { display: flex; flex-direction: column; justify-content: space-around;
-                      width: 24px; flex-shrink: 0; position: relative; align-self: stretch; }
-    </style>
-    """
-
-    # Build connector lines between rounds using a flex column of SVG lines
-    # We do this by inserting connector divs between round columns
-
-    js = """
-    <script>
-    function sendClick(payload) {
-        window.parent.postMessage({type: 'streamlit:setComponentValue', value: payload}, '*');
-    }
-    </script>
-    """
-
-    return f"""<!DOCTYPE html>
-<html>
-<head>{css}</head>
-<body>
-{js}
-<div class="bracket" id="bracket">{rounds_html}</div>
-</body>
-</html>"""
+    # Region winner
+    e8w = get_winner(region, 3, 0)
+    if e8w:
+        st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.8rem;color:#fbbf24;background:#1a2c1a;border:1px solid #fbbf24;border-radius:4px;padding:4px 8px;margin-top:4px;text-align:center;">🏆 {e8w}</div>', unsafe_allow_html=True)
 
 def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
     if df_stats.empty: return
@@ -308,39 +210,8 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
         st.session_state.expanded_matchup = (region, round_idx, game_idx)
         st.rerun()
 
-def render_region_tab(region, df_stats):
-    html = build_bracket_html(region)
-    click = components.html(html, height=580, scrolling=True)
-
-    if click and isinstance(click, str) and "|" in click:
-        parts = click.split("|")
-        if len(parts) == 5 and parts[4] == "pick":
-            r_reg, r_idx, g_idx, slot = parts[0], int(parts[1]), int(parts[2]), int(parts[3])
-            team = get_team_in_slot(r_reg, r_idx, g_idx, slot)
-            other = get_team_in_slot(r_reg, r_idx, g_idx, 1 - slot)
-            if team and other:
-                set_winner(r_reg, r_idx, g_idx, team)
-                st.rerun()
-        elif len(parts) == 4 and parts[3] == "cmp":
-            r_reg, r_idx, g_idx = parts[0], int(parts[1]), int(parts[2])
-            key = (r_reg, r_idx, g_idx)
-            st.session_state.expanded_matchup = None if st.session_state.expanded_matchup == key else key
-            st.rerun()
-
-    exp = st.session_state.expanded_matchup
-    if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
-        _, r_idx, g_idx = exp
-        t_a = get_team_in_slot(region, r_idx, g_idx, 0)
-        t_b = get_team_in_slot(region, r_idx, g_idx, 1)
-        if t_a and t_b:
-            st.markdown("---")
-            if st.button("✕ Close", key=f"close_cmp_{region}"):
-                st.session_state.expanded_matchup = None
-                st.rerun()
-            render_comparison_panel(t_a, t_b, region, r_idx, g_idx, df_stats)
-
 def render_final_four(df_stats):
-    st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:#f97316;letter-spacing:0.1em;text-align:center;">🏆 FINAL FOUR & CHAMPIONSHIP</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:#f97316;letter-spacing:0.1em;">🏆 Final Four & Championship</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     sf_matchups = [("East","West","sf1"), ("South","Midwest","sf2")]
@@ -349,12 +220,12 @@ def render_final_four(df_stats):
     for r1, r2, slot in sf_matchups:
         t1 = get_winner(r1, 3, 0)
         t2 = get_winner(r2, 3, 0)
-        st.markdown(f'<div style="font-family:DM Mono,monospace;font-size:0.7rem;color:#475569;text-transform:uppercase;margin-bottom:6px;">{r1} Champion vs {r2} Champion</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-family:monospace;font-size:0.65rem;color:#475569;text-transform:uppercase;margin-bottom:6px;">{r1} vs {r2}</div>', unsafe_allow_html=True)
         c_a, c_vs, c_b = st.columns([5, 0.5, 5])
         for col, team, s in [(c_a, t1, 0), (c_b, t2, 1)]:
             with col:
                 if not team:
-                    st.markdown('<div style="font-family:DM Mono,monospace;font-size:0.8rem;color:#334155;padding:8px 12px;border:1px dashed #1e3a5f;border-radius:5px;">TBD</div>', unsafe_allow_html=True)
+                    st.markdown('<div style="font-family:monospace;font-size:0.8rem;color:#334155;padding:8px 12px;border:1px dashed #1e3a5f;border-radius:5px;">TBD</div>', unsafe_allow_html=True)
                 else:
                     winner = st.session_state.final_four.get(slot)
                     prefix = "✓ " if winner == team else ""
@@ -369,7 +240,7 @@ def render_final_four(df_stats):
         if t1 and t2:
             ff_key = ("ff", slot)
             is_exp = st.session_state.expanded_matchup == ff_key
-            if st.button("▲ Close comparison" if is_exp else "▼ Compare", key=f"cmp_ff_{slot}"):
+            if st.button("▲ Close" if is_exp else "⚔ Compare", key=f"cmp_ff_{slot}"):
                 st.session_state.expanded_matchup = None if is_exp else ff_key
                 st.rerun()
             if is_exp:
@@ -382,7 +253,7 @@ def render_final_four(df_stats):
     for col, team, s in [(c_a, ct1, 0), (c_b, ct2, 1)]:
         with col:
             if not team:
-                st.markdown('<div style="font-family:DM Mono,monospace;font-size:0.8rem;color:#334155;padding:8px 12px;border:1px dashed #1e3a5f;border-radius:5px;">TBD</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-family:monospace;font-size:0.8rem;color:#334155;padding:8px 12px;border:1px dashed #1e3a5f;border-radius:5px;">TBD</div>', unsafe_allow_html=True)
             else:
                 champ  = st.session_state.final_four.get("champion")
                 prefix = "🏆 " if champ == team else ""
@@ -395,7 +266,7 @@ def render_final_four(df_stats):
     if ct1 and ct2:
         ff_key = ("ff", "champ")
         is_exp = st.session_state.expanded_matchup == ff_key
-        if st.button("▲ Close comparison" if is_exp else "▼ Compare", key="cmp_ff_champ"):
+        if st.button("▲ Close" if is_exp else "⚔ Compare", key="cmp_ff_champ"):
             st.session_state.expanded_matchup = None if is_exp else ff_key
             st.rerun()
         if is_exp:
@@ -415,6 +286,11 @@ def render_final_four(df_stats):
 def show():
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
+    /* Make buttons compact for bracket */
+    div[data-testid="stHorizontalBlock"] .stButton>button {
+        padding: 2px 6px !important; font-size: 11px !important;
+        min-height: 26px !important; height: 26px !important;
+    }
     </style>""", unsafe_allow_html=True)
     st.markdown("# 🏆 Bracket Simulator")
     init_bracket()
@@ -428,9 +304,43 @@ def show():
             nm.build(df_stats["team"].dropna().tolist(),
                      game_df["team"].dropna().unique().tolist())
 
-    tabs = st.tabs(REGIONS + ["🏆 Final Four"])
+    tabs = st.tabs(["🏀 All Regions"] + REGIONS + ["🏆 Final Four"])
+
+    # All regions tab
+    with tabs[0]:
+        col_e, col_w, col_s, col_m = st.columns(4)
+        for col, region in zip([col_e, col_w, col_s, col_m], REGIONS):
+            with col:
+                render_region_col(region, df_stats)
+
+        # Comparison panel (shown below all regions)
+        exp = st.session_state.expanded_matchup
+        if exp and isinstance(exp, tuple) and len(exp) == 3:
+            region, r_idx, g_idx = exp
+            t_a = get_team_in_slot(region, r_idx, g_idx, 0)
+            t_b = get_team_in_slot(region, r_idx, g_idx, 1)
+            if t_a and t_b:
+                st.markdown("---")
+                if st.button("✕ Close comparison", key="close_cmp_all"):
+                    st.session_state.expanded_matchup = None
+                    st.rerun()
+                render_comparison_panel(t_a, t_b, region, r_idx, g_idx, df_stats)
+
+    # Individual region tabs
     for i, region in enumerate(REGIONS):
-        with tabs[i]:
-            render_region_tab(region, df_stats)
-    with tabs[4]:
+        with tabs[i + 1]:
+            render_region_col(region, df_stats)
+            exp = st.session_state.expanded_matchup
+            if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
+                _, r_idx, g_idx = exp
+                t_a = get_team_in_slot(region, r_idx, g_idx, 0)
+                t_b = get_team_in_slot(region, r_idx, g_idx, 1)
+                if t_a and t_b:
+                    st.markdown("---")
+                    if st.button("✕ Close comparison", key=f"close_cmp_{region}"):
+                        st.session_state.expanded_matchup = None
+                        st.rerun()
+                    render_comparison_panel(t_a, t_b, region, r_idx, g_idx, df_stats)
+
+    with tabs[5]:
         render_final_four(df_stats)
