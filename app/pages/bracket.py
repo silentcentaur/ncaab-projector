@@ -250,7 +250,14 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
 <body>
 <script>
 function sendClick(payload) {{
+    // Try postMessage first (works in some Streamlit versions)
     window.parent.postMessage({{type: 'streamlit:setComponentValue', value: payload}}, '*');
+    // Also navigate parent URL with query param as reliable fallback
+    try {{
+        var url = new URL(window.parent.location.href);
+        url.searchParams.set('bclick', encodeURIComponent(payload));
+        window.parent.location.href = url.toString();
+    }} catch(e) {{}}
 }}
 </script>
 {inner}
@@ -369,10 +376,31 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
 
 def render_region_tab(region, df_stats, all_regions=False):
     regions = REGIONS if all_regions else [region]
-    height  = 1420 if all_regions else 640
-    html    = build_bracket_html(regions)
-    click   = components.html(html, height=height, scrolling=True)
 
+    # Handle query param clicks (picks AND compare both come through bclick)
+    params = st.query_params
+    if "bclick" in params:
+        import urllib.parse
+        payload = urllib.parse.unquote(params["bclick"])
+        parts = payload.split("|")
+        st.query_params.clear()
+        if len(parts) == 5 and parts[4] == "pick":
+            r_reg, r_idx, g_idx, slot = parts[0], int(parts[1]), int(parts[2]), int(parts[3])
+            team  = get_team_in_slot(r_reg, r_idx, g_idx, slot)
+            other = get_team_in_slot(r_reg, r_idx, g_idx, 1 - slot)
+            if team and other:
+                set_winner(r_reg, r_idx, g_idx, team)
+                st.rerun()
+        elif len(parts) == 4 and parts[3] == "cmp":
+            r_reg, r_idx, g_idx = parts[0], int(parts[1]), int(parts[2])
+            key = (r_reg, r_idx, g_idx)
+            st.session_state.expanded_matchup = None if st.session_state.expanded_matchup == key else key
+            st.rerun()
+
+    height = 1420 if all_regions else 640
+    html   = build_bracket_html(regions)
+    # Still read postMessage return value as backup
+    click  = components.html(html, height=height, scrolling=True)
     if click and isinstance(click, str) and "|" in click:
         parts = click.split("|")
         if len(parts) == 5 and parts[4] == "pick":
