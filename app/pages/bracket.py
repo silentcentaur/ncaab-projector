@@ -228,11 +228,14 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
                   margin: 0 12px; align-self: stretch; flex-shrink: 0; }
 """
 
-    # All 4 regions → 2x2 mirrored grid
+    # All 4 regions → 2x2 mirrored grid (stacked vertically)
     if set(regions) == set(REGIONS) or regions == REGIONS:
         top_row = _build_row("East", "West")
         bot_row = _build_row("South", "Midwest")
-        inner = f'<div class="grid-2x2"><div class="grid-row top">{top_row}</div><div class="grid-row">{bot_row}</div></div>'
+        inner = f'''<div style="display:flex;flex-direction:column;gap:0;min-width:max-content;">
+            <div style="display:flex;flex-direction:row;align-items:flex-start;padding-bottom:16px;border-bottom:2px solid #1e3a5f;margin-bottom:16px;">{top_row}</div>
+            <div style="display:flex;flex-direction:row;align-items:flex-start;">{bot_row}</div>
+        </div>'''
     else:
         # Single or arbitrary subset — just side by side
         parts = []
