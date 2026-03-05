@@ -238,7 +238,7 @@ MANUAL = {
     "Seattle":            "Seattle U Redhawks",
     "USC Upstate":        "South Carolina Upstate Spartans",
     "Southeast Missouri St": "Southeast Missouri State Redhawks",
-    "SIU Edwardsville":   "Southern Illinois Salukis",
+    "SIU Edwardsville":   "SIU Edwardsville Cougars",
     "Southern Indiana":   "Southern Indiana Screaming Eagles",
     "Stonehill":          "Stonehill Skyhawks",
     "Tennessee St":       "Tennessee State Tigers",
