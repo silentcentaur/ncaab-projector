@@ -8,10 +8,9 @@ import name_map as nm
 REGIONS = ["East", "West", "South", "Midwest"]
 SEEDS   = list(range(1, 17))
 FIRST_ROUND_PAIRS = [(1,16),(8,9),(5,12),(4,13),(6,11),(3,14),(7,10),(2,15)]
-SEEDS_VERSION = "2026-v5"
+SEEDS_VERSION = "2026-v6"
 ROUND_NAMES   = ["R64", "R32", "S16", "E8"]
 
-# ── State helpers ─────────────────────────────────────────────────────────────
 def init_bracket():
     if st.session_state.get("seeds_version") != SEEDS_VERSION:
         for k in ["bracket_teams","bracket_picks","final_four","expanded_matchup"]:
@@ -50,68 +49,85 @@ def get_team_in_slot(region, round_idx, game_idx, slot):
         return st.session_state.bracket_teams[region].get(FIRST_ROUND_PAIRS[game_idx][slot])
     return get_winner(region, round_idx - 1, game_idx * 2 + slot)
 
-# ── Render region as a vertical round-by-round list using st.button ───────────
+def slot_div(team, seed, is_winner, is_loser):
+    """Return a styled HTML div for a team slot."""
+    if not team:
+        return '<div style="height:24px;border:1px dashed #1a2d45;border-radius:3px;margin:1px 0;background:#080f1c;"></div>'
+    if is_winner:
+        bg, bc, tc = "#0f2d1a", "#22c55e", "#22c55e"
+        prefix = "✓ "
+    elif is_loser:
+        bg, bc, tc = "#080f1c", "#1a2d45", "#334155"
+        prefix = ""
+    else:
+        bg, bc, tc = "#112240", "#2d4a6b", "#cbd5e1"
+        prefix = ""
+    seed_html = f'<span style="font-size:9px;color:#64748b;background:#1e3a5f;padding:1px 4px;border-radius:3px;margin-right:5px;">{seed}</span>' if seed else ''
+    opacity = "0.38" if is_loser else "1"
+    return (f'<div style="font-size:11px;font-family:\'DM Mono\',monospace;padding:2px 8px;'
+            f'border:1px solid {bc};border-radius:3px;background:{bg};color:{tc};margin:1px 0;'
+            f'height:24px;line-height:20px;white-space:nowrap;overflow:hidden;'
+            f'text-overflow:ellipsis;opacity:{opacity};">'
+            f'{seed_html}{prefix}{team}</div>')
+
 def render_region_col(region, df_stats, key_prefix=""):
-    """Render one region as a compact vertical bracket using st.buttons."""
-    st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:#f97316;letter-spacing:0.1em;margin-bottom:4px;">{region}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;'
+        f'color:#f97316;letter-spacing:0.1em;margin-bottom:6px;">{region}</div>',
+        unsafe_allow_html=True)
 
     for r in range(4):
         num_games = 8 // (2 ** r)
-        st.markdown(f'<div style="font-family:monospace;font-size:0.55rem;color:#475569;text-transform:uppercase;letter-spacing:0.08em;border-left:2px solid #f97316;padding-left:4px;margin:4px 0 2px 0;">{ROUND_NAMES[r]}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="font-family:monospace;font-size:0.55rem;color:#475569;'
+            f'text-transform:uppercase;letter-spacing:0.08em;border-left:2px solid #f97316;'
+            f'padding-left:4px;margin:6px 0 3px 0;">{ROUND_NAMES[r]}</div>',
+            unsafe_allow_html=True)
+
         for g in range(num_games):
-            ta = get_team_in_slot(region, r, g, 0)
-            tb = get_team_in_slot(region, r, g, 1)
+            ta     = get_team_in_slot(region, r, g, 0)
+            tb     = get_team_in_slot(region, r, g, 1)
             winner = get_winner(region, r, g)
 
             for slot, team in [(0, ta), (1, tb)]:
-                seed  = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
-                other = get_team_in_slot(region, r, g, 1 - slot)
-                if not team:
-                    st.markdown('<div style="height:24px;border:1px dashed #1a2d45;border-radius:3px;margin:1px 0;background:#080f1c;"></div>', unsafe_allow_html=True)
-                    continue
-
-                is_w     = winner == team
-                is_l     = winner is not None and winner != team
-                can_pick = other is not None
-                seed_str = f"[{seed}] " if seed else ""
-                label    = f"{'✓ ' if is_w else ''}{seed_str}{team[:18]}"
-
-                if is_w:
-                    bg, bc, tc, op = "#0f2d1a", "#22c55e", "#22c55e", "1"
-                elif is_l:
-                    bg, bc, tc, op = "#080f1c", "#1a2d45", "#334155", "0.4"
-                else:
-                    bg, bc, tc, op = "#112240", "#2d4a6b", "#e2e8f0", "1"
+                seed     = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
+                other    = get_team_in_slot(region, r, g, 1 - slot)
+                is_w     = winner == team and team is not None
+                is_l     = winner is not None and winner != team and team is not None
+                can_pick = team is not None and other is not None
 
                 if can_pick:
-                    # Render as a styled clickable button
-                    clicked = st.button(label, key=f"p_{key_prefix}{region}_{r}_{g}_{slot}",
-                                        use_container_width=True)
-                    if clicked:
-                        set_winner(region, r, g, team)
-                        st.rerun()
+                    # Use a tiny column trick: wide styled div + invisible pick button overlay
+                    c_div, c_btn = st.columns([10, 1])
+                    c_div.markdown(slot_div(team, seed, is_w, is_l), unsafe_allow_html=True)
+                    with c_btn:
+                        st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
+                        if st.button("›", key=f"p_{key_prefix}{region}_{r}_{g}_{slot}",
+                                     help=f"Pick {team}"):
+                            set_winner(region, r, g, team)
+                            st.rerun()
                 else:
-                    st.markdown(
-                        f'<div style="font-size:11px;padding:2px 8px;border:1px solid {bc};'
-                        f'border-radius:3px;background:{bg};color:{tc};margin:1px 0;height:24px;'
-                        f'line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:{op};">'
-                        f'{label}</div>', unsafe_allow_html=True)
+                    st.markdown(slot_div(team, seed, is_w, is_l), unsafe_allow_html=True)
 
-            # Compare button between team pairs
+            # Compare + spacer
             if ta and tb:
-                exp = st.session_state.expanded_matchup
+                exp    = st.session_state.expanded_matchup
                 is_exp = exp == (region, r, g)
-                cmp_label = "▲" if is_exp else "⚔"
-                if st.button(cmp_label, key=f"cmp_{key_prefix}{region}_{r}_{g}", help="Compare teams"):
-                    st.session_state.expanded_matchup = None if is_exp else (region, r, g)
-                    st.rerun()
+                c1, c2 = st.columns([10, 1])
+                with c2:
+                    if st.button("▲" if is_exp else "⚔", key=f"cmp_{key_prefix}{region}_{r}_{g}",
+                                 help="Compare teams"):
+                        st.session_state.expanded_matchup = None if is_exp else (region, r, g)
+                        st.rerun()
+            st.markdown('<div style="height:3px"></div>', unsafe_allow_html=True)
 
-            st.markdown('<div style="height:2px;"></div>', unsafe_allow_html=True)
-
-    # Region winner
     e8w = get_winner(region, 3, 0)
     if e8w:
-        st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.8rem;color:#fbbf24;background:#1a2c1a;border:1px solid #fbbf24;border-radius:4px;padding:4px 8px;margin-top:4px;text-align:center;">🏆 {e8w}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:0.85rem;color:#fbbf24;'
+            f'background:#1a2c1a;border:1px solid #fbbf24;border-radius:4px;padding:4px 8px;'
+            f'margin-top:6px;text-align:center;">🏆 {e8w}</div>',
+            unsafe_allow_html=True)
 
 def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
     if df_stats.empty: return
@@ -215,10 +231,7 @@ def render_final_four(df_stats):
     st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.4rem;color:#f97316;letter-spacing:0.1em;">🏆 Final Four & Championship</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    sf_matchups = [("East","West","sf1"), ("South","Midwest","sf2")]
-    sf_winners  = {}
-
-    for r1, r2, slot in sf_matchups:
+    for r1, r2, slot in [("East","West","sf1"), ("South","Midwest","sf2")]:
         t1 = get_winner(r1, 3, 0)
         t2 = get_winner(r2, 3, 0)
         st.markdown(f'<div style="font-family:monospace;font-size:0.65rem;color:#475569;text-transform:uppercase;margin-bottom:6px;">{r1} vs {r2}</div>', unsafe_allow_html=True)
@@ -230,17 +243,15 @@ def render_final_four(df_stats):
                 else:
                     winner = st.session_state.final_four.get(slot)
                     prefix = "✓ " if winner == team else ""
-                    if st.button(f"{prefix}{team}", key=f"ff_{slot}_{s}",
-                                 use_container_width=True, disabled=(not t1 or not t2)):
+                    if st.button(f"{prefix}{team}", key=f"ff_{slot}_{s}", use_container_width=True, disabled=(not t1 or not t2)):
                         st.session_state.final_four[slot] = team
                         st.session_state.final_four.pop("champion", None)
                         st.rerun()
         c_vs.markdown("<div style='text-align:center;color:#334155;padding-top:8px;'>vs</div>", unsafe_allow_html=True)
-        sf_winners[slot] = st.session_state.final_four.get(slot)
 
+        ff_key = ("ff", slot)
+        is_exp = st.session_state.expanded_matchup == ff_key
         if t1 and t2:
-            ff_key = ("ff", slot)
-            is_exp = st.session_state.expanded_matchup == ff_key
             if st.button("▲ Close" if is_exp else "⚔ Compare", key=f"cmp_ff_{slot}"):
                 st.session_state.expanded_matchup = None if is_exp else ff_key
                 st.rerun()
@@ -248,7 +259,8 @@ def render_final_four(df_stats):
                 render_comparison_panel(t1, t2, "ff", slot, 0, df_stats)
         st.markdown("<br>", unsafe_allow_html=True)
 
-    ct1, ct2 = sf_winners.get("sf1"), sf_winners.get("sf2")
+    ct1 = st.session_state.final_four.get("sf1")
+    ct2 = st.session_state.final_four.get("sf2")
     st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:#fbbf24;letter-spacing:0.1em;">🏆 National Championship</div>', unsafe_allow_html=True)
     c_a, c_vs, c_b = st.columns([5, 0.5, 5])
     for col, team, s in [(c_a, ct1, 0), (c_b, ct2, 1)]:
@@ -256,17 +268,16 @@ def render_final_four(df_stats):
             if not team:
                 st.markdown('<div style="font-family:monospace;font-size:0.8rem;color:#334155;padding:8px 12px;border:1px dashed #1e3a5f;border-radius:5px;">TBD</div>', unsafe_allow_html=True)
             else:
-                champ  = st.session_state.final_four.get("champion")
+                champ = st.session_state.final_four.get("champion")
                 prefix = "🏆 " if champ == team else ""
-                if st.button(f"{prefix}{team}", key=f"champ_{s}",
-                             use_container_width=True, disabled=(not ct1 or not ct2)):
+                if st.button(f"{prefix}{team}", key=f"champ_{s}", use_container_width=True, disabled=(not ct1 or not ct2)):
                     st.session_state.final_four["champion"] = team
                     st.rerun()
     c_vs.markdown("<div style='text-align:center;color:#334155;padding-top:8px;'>vs</div>", unsafe_allow_html=True)
 
+    ff_key = ("ff", "champ")
+    is_exp = st.session_state.expanded_matchup == ff_key
     if ct1 and ct2:
-        ff_key = ("ff", "champ")
-        is_exp = st.session_state.expanded_matchup == ff_key
         if st.button("▲ Close" if is_exp else "⚔ Compare", key="cmp_ff_champ"):
             st.session_state.expanded_matchup = None if is_exp else ff_key
             st.rerun()
@@ -275,43 +286,17 @@ def render_final_four(df_stats):
 
     champ = st.session_state.final_four.get("champion")
     if champ:
-        st.markdown(f"""
-        <div style="text-align:center;margin-top:2rem;padding:2rem;
-                    background:linear-gradient(135deg,#1a2c1a,#0f172a);
-                    border:2px solid #fbbf24;border-radius:12px;">
+        st.markdown(f"""<div style="text-align:center;margin-top:2rem;padding:2rem;
+            background:linear-gradient(135deg,#1a2c1a,#0f172a);border:2px solid #fbbf24;border-radius:12px;">
             <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:#fbbf24;letter-spacing:0.2em;">YOUR CHAMPION</div>
             <div style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fbbf24;">{champ}</div>
-            <div style="font-size:2rem;">🏆</div>
-        </div>""", unsafe_allow_html=True)
+            <div style="font-size:2rem;">🏆</div></div>""", unsafe_allow_html=True)
 
 def show():
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
-    /* Bracket team buttons - look like slots, not orange buttons */
-    .stButton>button {
-        background: #112240 !important;
-        color: #e2e8f0 !important;
-        border: 1px solid #2d4a6b !important;
-        border-radius: 3px !important;
-        padding: 0px 6px !important;
-        font-size: 11px !important;
-        font-family: 'DM Mono', monospace !important;
-        min-height: 24px !important;
-        height: 24px !important;
-        line-height: 24px !important;
-        transition: all 0.1s !important;
-    }
-    .stButton>button:hover {
-        background: #1a3255 !important;
-        border-color: #f97316 !important;
-        color: #f1f5f9 !important;
-    }
-    /* winner button */
-    .stButton>button[kind="secondary"] {
-        background: #0f2d1a !important;
-        border-color: #22c55e !important;
-        color: #22c55e !important;
-    }
+    /* Scope pick arrow buttons to be tiny and subtle */
+    button[data-testid="baseButton-secondary"] { transition: all 0.1s; }
     </style>""", unsafe_allow_html=True)
     st.markdown("# 🏆 Bracket Simulator")
     init_bracket()
@@ -327,14 +312,11 @@ def show():
 
     tabs = st.tabs(["🏀 All Regions"] + REGIONS + ["🏆 Final Four"])
 
-    # All regions tab
     with tabs[0]:
-        col_e, col_w, col_s, col_m = st.columns(4)
-        for col, region in zip([col_e, col_w, col_s, col_m], REGIONS):
+        cols = st.columns(4)
+        for col, region in zip(cols, REGIONS):
             with col:
-                render_region_col(region, df_stats)
-
-        # Comparison panel (shown below all regions)
+                render_region_col(region, df_stats, key_prefix="all_")
         exp = st.session_state.expanded_matchup
         if exp and isinstance(exp, tuple) and len(exp) == 3:
             region, r_idx, g_idx = exp
@@ -347,10 +329,9 @@ def show():
                     st.rerun()
                 render_comparison_panel(t_a, t_b, region, r_idx, g_idx, df_stats)
 
-    # Individual region tabs
     for i, region in enumerate(REGIONS):
         with tabs[i + 1]:
-            render_region_col(region, df_stats, key_prefix="tab_")
+            render_region_col(region, df_stats, key_prefix=f"tab{i}_")
             exp = st.session_state.expanded_matchup
             if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
                 _, r_idx, g_idx = exp
