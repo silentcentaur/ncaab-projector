@@ -233,6 +233,87 @@ def show():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ── Dual radar chart ──────────────────────────────────────────────────────
+    import plotly.graph_objects as go
+
+    def get_percentile(val, all_vals, higher_is_better=True):
+        if val is None or pd.isna(val): return None
+        arr = [v for v in all_vals if v is not None and not pd.isna(v)]
+        if not arr: return None
+        pct = sum(v <= val for v in arr) / len(arr) * 100
+        return pct if higher_is_better else 100 - pct
+
+    df2 = db.get_team_data()
+    if not df2.empty:
+        df2.columns = [c.lower() for c in df2.columns]
+        def col_vals(col):
+            return pd.to_numeric(df2[col], errors="coerce").dropna().tolist() if col in df2.columns else []
+
+        radar_metrics = [
+            ("Off. Eff.",  "adj_oe",      True),
+            ("Def. Eff.",  "adj_de",      False),
+            ("Tempo",      "adj_tempo",   True),
+            ("eFG%",       "efg_pct",     True),
+            ("TOV%",       "tov_pct",     False),
+            ("ORB%",       "orb_pct",     True),
+            ("FTR",        "ftr",         True),
+            ("Opp eFG%",   "opp_efg_pct", False),
+        ]
+        labels = [m[0] for m in radar_metrics]
+
+        def team_percentiles(row):
+            vals = []
+            for label, col, hib in radar_metrics:
+                v = row.get(col)
+                v = float(v) if v is not None and not pd.isna(v) else None
+                pct = get_percentile(v, col_vals(col), hib)
+                vals.append(pct if pct is not None else 0)
+            return vals
+
+        pcts_a = team_percentiles(ra)
+        pcts_b = team_percentiles(rb)
+        labels_closed = labels + [labels[0]]
+        pcts_a_closed = pcts_a + [pcts_a[0]]
+        pcts_b_closed = pcts_b + [pcts_b[0]]
+
+        fig_radar = go.Figure()
+        fig_radar.add_trace(go.Scatterpolar(
+            r=pcts_a_closed, theta=labels_closed,
+            fill="toself", name=team_a,
+            line=dict(color="#f97316", width=2),
+            fillcolor="rgba(249,115,22,0.15)"
+        ))
+        fig_radar.add_trace(go.Scatterpolar(
+            r=pcts_b_closed, theta=labels_closed,
+            fill="toself", name=team_b,
+            line=dict(color="#06b6d4", width=2),
+            fillcolor="rgba(6,182,212,0.15)"
+        ))
+        fig_radar.update_layout(
+            polar=dict(
+                bgcolor="rgba(0,0,0,0)",
+                radialaxis=dict(visible=True, range=[0,100],
+                                tickfont=dict(size=8, color="#475569"),
+                                gridcolor="#1e2d45",
+                                tickvals=[25,50,75,100],
+                                ticktext=["25%","50%","75%","100%"]),
+                angularaxis=dict(tickfont=dict(size=11, color="#94a3b8"), gridcolor="#1e2d45"),
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#f1f5f9", family="DM Sans"),
+            legend=dict(font=dict(size=11, color="#94a3b8"),
+                        bgcolor="rgba(0,0,0,0)", x=0.5, y=-0.1,
+                        orientation="h", xanchor="center"),
+            margin=dict(l=60, r=60, t=40, b=60),
+            title=dict(text="SEASON PROFILE VS. NATIONAL PERCENTILES",
+                       font=dict(family="Bebas Neue", size=16, color="#f1f5f9"),
+                       x=0, xanchor="left"),
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
     # ── Factor breakdown ──────────────────────────────────────────────────────
     st.markdown("### Factor Breakdown")
     st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;text-transform:uppercase;margin-bottom:1rem;">How each active factor favors each team</div>', unsafe_allow_html=True)
