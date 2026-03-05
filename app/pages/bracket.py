@@ -1,7 +1,7 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
@@ -9,28 +9,8 @@ import name_map as nm
 
 REGIONS = ["East", "West", "South", "Midwest"]
 SEEDS   = list(range(1, 17))
-# seed pairs for R64: (top_seed, bottom_seed)
 FIRST_ROUND_PAIRS = [(1,16),(8,9),(5,12),(4,13),(6,11),(3,14),(7,10),(2,15)]
-
-SEEDS_VERSION = "2026-v3"
-
-DARK_CSS = """<style>
-[data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
-</style>"""
-
-# ── Colors ────────────────────────────────────────────────────────────────────
-C_BG        = "#0a0f1e"
-C_SLOT_BG   = "#112240"
-C_SLOT_WIN  = "#0f2d1a"
-C_SLOT_BORDER = "#2d4a6b"
-C_WIN_BORDER  = "#22c55e"
-C_LINE      = "#1e3a5f"
-C_TEXT      = "#e2e8f0"
-C_TEXT_WIN  = "#22c55e"
-C_TEXT_SEED = "#64748b"
-C_ORANGE    = "#f97316"
-C_TBD       = "#334155"
-C_HOVER     = "#1a3255"
+SEEDS_VERSION = "2026-v4"
 
 # ── State helpers ─────────────────────────────────────────────────────────────
 def init_bracket():
@@ -38,7 +18,6 @@ def init_bracket():
         for k in ["bracket_teams","bracket_picks","final_four","expanded_matchup"]:
             st.session_state.pop(k, None)
         st.session_state.seeds_version = SEEDS_VERSION
-
     if "bracket_teams" not in st.session_state:
         try:
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -49,13 +28,14 @@ def init_bracket():
             }
         except Exception:
             st.session_state.bracket_teams = {r: {s: None for s in SEEDS} for r in REGIONS}
-
     if "bracket_picks" not in st.session_state:
         st.session_state.bracket_picks = {r: {} for r in REGIONS}
     if "final_four" not in st.session_state:
         st.session_state.final_four = {}
     if "expanded_matchup" not in st.session_state:
         st.session_state.expanded_matchup = None
+    if "bracket_click" not in st.session_state:
+        st.session_state.bracket_click = None
 
 def get_winner(region, round_idx, game_idx):
     return st.session_state.bracket_picks.get(region,{}).get(round_idx,{}).get(game_idx)
@@ -78,199 +58,157 @@ def get_team_in_slot(region, round_idx, game_idx, slot):
         return st.session_state.bracket_teams[region].get(seed)
     return get_winner(region, round_idx - 1, game_idx * 2 + slot)
 
-# ── Bracket geometry ──────────────────────────────────────────────────────────
-# Layout constants
-SLOT_W      = 140   # width of a team slot box
-SLOT_H      = 22    # height of a team slot box
-SLOT_GAP    = 4     # gap between the two teams in a matchup
-ROUND_GAP   = 50    # horizontal gap between rounds
-NUM_ROUNDS  = 4     # R64 → R32 → S16 → E8
+# ── HTML bracket builder ──────────────────────────────────────────────────────
+def team_html(region, round_idx, game_idx, slot):
+    team   = get_team_in_slot(region, round_idx, game_idx, slot)
+    winner = get_winner(region, round_idx, game_idx)
+    other  = get_team_in_slot(region, round_idx, game_idx, 1 - slot)
+    seed   = FIRST_ROUND_PAIRS[game_idx][slot] if round_idx == 0 else None
 
-def round_x(r):
-    """Left x of round r (0=R64)."""
-    return r * (SLOT_W + ROUND_GAP)
+    if not team:
+        return '<div class="team tbd">TBD</div>'
 
-def matchup_positions(round_idx):
-    """
-    Return list of (cx, top_y) for each game in the round.
-    cx = left edge of the slot, top_y = y of the top team slot.
-    Games are evenly spaced vertically.
-    """
-    num_games = 8 // (2 ** round_idx)
-    # Each matchup occupies a vertical band
-    # Total height we want to fill
-    total_h = 8 * (2 * SLOT_H + SLOT_GAP + 20)  # 8 R64 matchups worth of space
-    band = total_h / num_games
-    cx = round_x(round_idx)
-    positions = []
-    for g in range(num_games):
-        center_y = band * g + band / 2
-        top_y = center_y - (SLOT_H + SLOT_GAP / 2)
-        positions.append((cx, top_y))
-    return positions
+    is_winner = winner == team
+    is_loser  = winner is not None and winner != team
+    can_pick  = other is not None
 
-def build_bracket_figure(region, df_stats):
-    """Build a Plotly figure for one region's bracket."""
-    positions_by_round = [matchup_positions(r) for r in range(NUM_ROUNDS)]
-    total_h = 8 * (2 * SLOT_H + SLOT_GAP + 20)
-    total_w = round_x(NUM_ROUNDS) + 20
+    cls = "team"
+    if is_winner: cls += " winner"
+    elif is_loser: cls += " loser"
+    if can_pick:  cls += " pickable"
 
-    shapes = []
-    annotations = []
-    # clickable_slots: list of dicts with text=team, region, round, game, slot
-    # We encode these in customdata of scatter points
-    scatter_x, scatter_y, scatter_custom = [], [], []
+    seed_html = f'<span class="seed">{seed}</span>' if seed else ''
+    pick_payload = f"{region}|{round_idx}|{game_idx}|{slot}|pick"
+    cmp_payload  = f"{region}|{round_idx}|{game_idx}|cmp"
 
-    def add_slot(x, y, w, h, team, seed, is_winner, is_loser, region, round_idx, game_idx, slot):
-        bg    = C_SLOT_WIN  if is_winner else C_SLOT_BG
-        border= C_WIN_BORDER if is_winner else C_SLOT_BORDER
-        tc    = C_TEXT_WIN  if is_winner else (C_TBD if not team else C_TEXT)
-        alpha = 0.35 if is_loser else 1.0
+    onclick = f"sendClick('{pick_payload}')" if can_pick else ""
 
-        # Box
-        shapes.append(dict(
-            type="rect", x0=x, y0=-(y+h), x1=x+w, y1=-y,
-            fillcolor=bg, line=dict(color=border, width=1),
-            opacity=alpha,
-        ))
+    return f'''<div class="{cls}" onclick="{onclick}" title="{'Click to pick winner' if can_pick else ''}">
+        {seed_html}<span class="name">{team}</span>
+    </div>'''
 
-        label = team if team else "TBD"
-        seed_str = f"{seed} " if seed and round_idx == 0 else ""
-
-        # Seed number (small, left side)
-        if seed and round_idx == 0:
-            annotations.append(dict(
-                x=x+6, y=-(y + h/2),
-                text=f"<b>{seed}</b>",
-                font=dict(size=9, color=C_TEXT_SEED, family="DM Mono"),
-                showarrow=False, xanchor="left", yanchor="middle",
-                opacity=alpha,
-            ))
-            text_x = x + 22
-        else:
-            text_x = x + 8
-
-        # Team name
-        annotations.append(dict(
-            x=text_x, y=-(y + h/2),
-            text=label,
-            font=dict(size=11, color=tc, family="DM Sans"),
-            showarrow=False, xanchor="left", yanchor="middle",
-            opacity=alpha,
-        ))
-
-        # Invisible scatter point for click detection
-        if team and team != "TBD":
-            scatter_x.append(x + w/2)
-            scatter_y.append(-(y + h/2))
-            scatter_custom.append({
-                "region": region, "round": round_idx,
-                "game": game_idx, "slot": slot, "team": team
-            })
-
-    def add_connector(r, g):
-        """Draw bracket connector lines for game g in round r - only on even g."""
-        if g % 2 != 0:
-            return
-        cx_top, top_y_top = positions_by_round[r][g]
-        cx_bot, top_y_bot = positions_by_round[r][g + 1]
-        next_g  = g // 2
-        cx_next, top_y_next = positions_by_round[r + 1][next_g]
-        right_x = cx_top + SLOT_W
-        mid_x   = right_x + ROUND_GAP / 2
-
-        def matchup_mid(ty):
-            return (ty + SLOT_H/2 + ty + SLOT_H + SLOT_GAP + SLOT_H/2) / 2
-
-        y_top  = matchup_mid(top_y_top)
-        y_bot  = matchup_mid(top_y_bot)
-        y_next = matchup_mid(top_y_next)
-
-        for y in [y_top, y_bot]:
-            shapes.append(dict(type="line", x0=right_x, y0=-y, x1=mid_x, y1=-y,
-                line=dict(color=C_LINE, width=1.5)))
-        shapes.append(dict(type="line", x0=mid_x, y0=-y_top, x1=mid_x, y1=-y_bot,
-            line=dict(color=C_LINE, width=1.5)))
-        shapes.append(dict(type="line", x0=mid_x, y0=-y_next, x1=cx_next, y1=-y_next,
-            line=dict(color=C_LINE, width=1.5)))
-
-    # Draw all matchups
-    for r in range(NUM_ROUNDS):
-        positions = positions_by_round[r]
-        num_games = len(positions)
-        for g in range(num_games):
-            cx, top_y = positions[g]
-            winner = get_winner(region, r, g)
-            for slot in range(2):
-                team  = get_team_in_slot(region, r, g, slot)
-                seed  = FIRST_ROUND_PAIRS[g][slot] if r == 0 else None
-                y_off = 0 if slot == 0 else SLOT_H + SLOT_GAP
-                is_w  = (winner == team and team is not None)
-                is_l  = (winner is not None and winner != team and team is not None)
-                add_slot(cx, top_y + y_off, SLOT_W, SLOT_H,
-                         team, seed, is_w, is_l, region, r, g, slot)
-
-            # Connector to next round
-            if r < NUM_ROUNDS - 1:
-                add_connector(r, g)
-
-    # Elite 8 winner slot (rightmost)
-    e8_winner = get_winner(region, 3, 0)
-    ex = round_x(NUM_ROUNDS)
-    ey = total_h / 2 - SLOT_H / 2
-    shapes.append(dict(
-        type="rect", x0=ex, y0=-(ey+SLOT_H), x1=ex+SLOT_W, y1=-ey,
-        fillcolor=C_SLOT_WIN if e8_winner else C_SLOT_BG,
-        line=dict(color=C_WIN_BORDER if e8_winner else C_ORANGE, width=2),
-    ))
-    annotations.append(dict(
-        x=ex+8, y=-(ey+SLOT_H/2),
-        text=e8_winner or "→ Final Four",
-        font=dict(size=11, color=C_WIN_BORDER if e8_winner else C_ORANGE, family="DM Sans"),
-        showarrow=False, xanchor="left", yanchor="middle",
-    ))
-    # Connector from E8 to winner box
-    e8_pos = positions_by_round[3][0]
-    e8_mid = e8_pos[1] + SLOT_H / 2
-    shapes.append(dict(type="line",
-        x0=round_x(3)+SLOT_W, y0=-e8_mid,
-        x1=ex, y1=-(ey+SLOT_H/2),
-        line=dict(color=C_LINE, width=1.5)))
-
-    # Round labels
+def build_bracket_html(region):
+    """Build the full bracket HTML for one region."""
     round_names = ["Round of 64", "Round of 32", "Sweet 16", "Elite 8"]
-    for r, name in enumerate(round_names):
-        annotations.append(dict(
-            x=round_x(r) + SLOT_W/2, y=10,
-            text=name.upper(),
-            font=dict(size=9, color=C_ORANGE, family="DM Mono"),
-            showarrow=False, xanchor="center", yanchor="bottom",
-        ))
+    num_rounds  = 4
 
-    # Scatter for click targets
-    fig = go.Figure()
-    if scatter_x:
-        fig.add_trace(go.Scatter(
-            x=scatter_x, y=scatter_y,
-            mode="markers",
-            marker=dict(size=SLOT_H, opacity=0, symbol="square"),
-            customdata=scatter_custom,
-            hovertemplate="%{customdata.team}<extra></extra>",
-        ))
+    rounds_html = ""
+    for r in range(num_rounds):
+        num_games = 8 // (2 ** r)
+        matchups_html = ""
+        for g in range(num_games):
+            team_a = team_html(region, r, g, 0)
+            team_b = team_html(region, r, g, 1)
 
-    fig.update_layout(
-        shapes=shapes,
-        annotations=annotations,
-        paper_bgcolor=C_BG,
-        plot_bgcolor=C_BG,
-        xaxis=dict(visible=False, range=[-10, total_w + SLOT_W + 10]),
-        yaxis=dict(visible=False, range=[-(total_h + 20), 20]),
-        margin=dict(l=10, r=10, t=30, b=10),
-        height=max(600, int(total_h) + 50),
-        showlegend=False,
-        dragmode=False,
-    )
-    return fig
+            ta = get_team_in_slot(region, r, g, 0)
+            tb = get_team_in_slot(region, r, g, 1)
+            can_compare = ta is not None and tb is not None
+            cmp_payload = f"{region}|{r}|{g}|cmp"
+            exp = st.session_state.expanded_matchup
+            is_expanded = exp == (region, r, g)
+            cmp_btn = ""
+            if can_compare:
+                cmp_label = "▲" if is_expanded else "▼"
+                cmp_btn = f'<button class="cmp-btn" onclick="sendClick(\'{cmp_payload}\')" title="Compare teams">{cmp_label}</button>'
+
+            matchups_html += f'''
+            <div class="matchup">
+                <div class="matchup-teams">
+                    {team_a}
+                    {team_b}
+                </div>
+                {cmp_btn}
+            </div>'''
+
+        rounds_html += f'''
+        <div class="round">
+            <div class="round-label">{round_names[r]}</div>
+            <div class="round-games">{matchups_html}</div>
+        </div>'''
+
+    # Final slot (region winner)
+    e8_winner = get_winner(region, 3, 0)
+    winner_html = f'<div class="team winner"><span class="name">{e8_winner}</span></div>' if e8_winner else '<div class="team tbd">→ Final Four</div>'
+    rounds_html += f'''
+    <div class="round final-slot">
+        <div class="round-label">Region Winner</div>
+        <div class="round-games"><div class="matchup"><div class="matchup-teams">{winner_html}</div></div></div>
+    </div>'''
+
+    css = """
+    <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto; }
+    .bracket { display: flex; flex-direction: row; align-items: stretch; gap: 0; padding: 16px 8px; min-width: max-content; }
+    .round { display: flex; flex-direction: column; min-width: 160px; }
+    .round-label { font-family: monospace; font-size: 10px; color: #f97316; text-transform: uppercase;
+                   letter-spacing: 0.1em; padding: 0 8px 8px 8px; text-align: center; white-space: nowrap; }
+    .round-games { display: flex; flex-direction: column; flex: 1; justify-content: space-around; }
+
+    .matchup { display: flex; flex-direction: row; align-items: center; position: relative; flex: 1;
+               justify-content: flex-start; }
+    .matchup-teams { display: flex; flex-direction: column; gap: 2px; position: relative; }
+
+    /* Connector lines via pseudo-elements */
+    .matchup-teams::after {
+        content: '';
+        position: absolute;
+        right: -20px;
+        top: 50%;
+        width: 20px;
+        height: 1px;
+        background: #1e3a5f;
+    }
+
+    .team { display: flex; align-items: center; gap: 6px; width: 150px; height: 26px;
+             padding: 0 8px; border-radius: 4px; border: 1px solid #2d4a6b;
+             background: #112240; color: #e2e8f0; font-size: 12px; transition: all 0.1s;
+             white-space: nowrap; overflow: hidden; }
+    .team.tbd { color: #334155; border-color: #1a2d45; border-style: dashed; background: #080f1c; }
+    .team.winner { background: #0f2d1a; border-color: #22c55e; color: #22c55e; }
+    .team.loser  { opacity: 0.35; }
+    .team.pickable { cursor: pointer; }
+    .team.pickable:hover { background: #1a3255; border-color: #f97316; color: #f1f5f9; }
+    .team.winner.pickable:hover { background: #143d22; border-color: #4ade80; }
+
+    .seed { font-size: 10px; color: #64748b; background: #1e3a5f; padding: 1px 4px;
+            border-radius: 3px; min-width: 18px; text-align: center; flex-shrink: 0; }
+    .name { overflow: hidden; text-overflow: ellipsis; }
+
+    .cmp-btn { background: none; border: 1px solid #1e3a5f; color: #475569; cursor: pointer;
+               font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-left: 4px;
+               transition: all 0.1s; }
+    .cmp-btn:hover { border-color: #f97316; color: #f97316; }
+
+    /* Bracket connector lines between rounds */
+    .round:not(.final-slot) .round-games { position: relative; }
+    .round:not(:last-child) .matchup { padding-right: 20px; }
+
+    /* Draw the vertical + horizontal bracket connectors */
+    .connector-wrap { display: flex; flex-direction: column; justify-content: space-around;
+                      width: 24px; flex-shrink: 0; position: relative; align-self: stretch; }
+    </style>
+    """
+
+    # Build connector lines between rounds using a flex column of SVG lines
+    # We do this by inserting connector divs between round columns
+
+    js = """
+    <script>
+    function sendClick(payload) {
+        window.parent.postMessage({type: 'streamlit:setComponentValue', value: payload}, '*');
+    }
+    </script>
+    """
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>{css}</head>
+<body>
+{js}
+<div class="bracket" id="bracket">{rounds_html}</div>
+</body>
+</html>"""
 
 def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
     if df_stats.empty: return
@@ -280,6 +218,7 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
         st.info("Stats not available for one or both teams.")
         return
 
+    import plotly.graph_objects as go
     ra, rb = ra_rows.iloc[0], rb_rows.iloc[0]
 
     def get_pct(val, col, hib=True):
@@ -295,7 +234,6 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
         ("TOV%", "tov_pct", False), ("ORB%", "orb_pct", True),
         ("FTR", "ftr", True), ("Opp eFG%", "opp_efg_pct", False),
     ]
-
     def row_pcts(row):
         out = []
         for _, col, hib in radar_metrics:
@@ -306,7 +244,7 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
 
     labels = [m[0] for m in radar_metrics]
     pa, pb = row_pcts(ra), row_pcts(rb)
-    lc = labels + [labels[0]]; pac = pa + [pa[0]]; pbc = pb + [pb[0]]
+    lc = labels+[labels[0]]; pac = pa+[pa[0]]; pbc = pb+[pb[0]]
 
     st.markdown(f"### ⚔️ {team_a} vs {team_b}")
     rc1, rc2 = st.columns(2)
@@ -335,7 +273,7 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
 
     with rc2:
         for label, va, vb, hib, fmt in [
-            ("Adj OE", g(ra,"adj_oe",100), g(rb,"adj_oe",100), True, ".1f"),
+            ("Adj OE", g(ra,"adj_oe",100), g(rb,"adj_oe",100), True,  ".1f"),
             ("Adj DE", g(ra,"adj_de",100), g(rb,"adj_de",100), False, ".1f"),
             ("eFG%",   g(ra,"efg_pct"),    g(rb,"efg_pct"),    True,  ".3f"),
             ("TOV%",   g(ra,"tov_pct"),    g(rb,"tov_pct"),    False, ".3f"),
@@ -371,27 +309,24 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
         st.rerun()
 
 def render_region_tab(region, df_stats):
-    st.markdown(f'<div style="font-family:Bebas Neue,sans-serif;font-size:1.4rem;color:#f97316;letter-spacing:0.1em;">{region} Region</div>', unsafe_allow_html=True)
+    html = build_bracket_html(region)
+    click = components.html(html, height=580, scrolling=True)
 
-    fig = build_bracket_figure(region, df_stats)
-    click = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
-                            selection_mode="points", key=f"bracket_{region}")
-
-    # Handle click
-    if click and click.selection and click.selection.points:
-        pt = click.selection.points[0]
-        cd = pt.get("customdata", {})
-        if isinstance(cd, dict) and "team" in cd:
-            clicked_team  = cd["team"]
-            r_idx = cd["round"]; g_idx = cd["game"]; slot = cd["slot"]
-            other_slot = 1 - slot
-            other_team = get_team_in_slot(region, r_idx, g_idx, other_slot)
-            if other_team:  # can only pick if opponent is set
-                set_winner(region, r_idx, g_idx, clicked_team)
-                st.session_state.expanded_matchup = (region, r_idx, g_idx)
+    if click and isinstance(click, str) and "|" in click:
+        parts = click.split("|")
+        if len(parts) == 5 and parts[4] == "pick":
+            r_reg, r_idx, g_idx, slot = parts[0], int(parts[1]), int(parts[2]), int(parts[3])
+            team = get_team_in_slot(r_reg, r_idx, g_idx, slot)
+            other = get_team_in_slot(r_reg, r_idx, g_idx, 1 - slot)
+            if team and other:
+                set_winner(r_reg, r_idx, g_idx, team)
                 st.rerun()
+        elif len(parts) == 4 and parts[3] == "cmp":
+            r_reg, r_idx, g_idx = parts[0], int(parts[1]), int(parts[2])
+            key = (r_reg, r_idx, g_idx)
+            st.session_state.expanded_matchup = None if st.session_state.expanded_matchup == key else key
+            st.rerun()
 
-    # Comparison panel
     exp = st.session_state.expanded_matchup
     if exp and isinstance(exp, tuple) and len(exp) == 3 and exp[0] == region:
         _, r_idx, g_idx = exp
@@ -399,8 +334,7 @@ def render_region_tab(region, df_stats):
         t_b = get_team_in_slot(region, r_idx, g_idx, 1)
         if t_a and t_b:
             st.markdown("---")
-            col_close, _ = st.columns([1, 8])
-            if col_close.button("✕ Close", key=f"close_cmp_{region}"):
+            if st.button("✕ Close", key=f"close_cmp_{region}"):
                 st.session_state.expanded_matchup = None
                 st.rerun()
             render_comparison_panel(t_a, t_b, region, r_idx, g_idx, df_stats)
@@ -430,10 +364,8 @@ def render_final_four(df_stats):
                         st.session_state.final_four.pop("champion", None)
                         st.rerun()
         c_vs.markdown("<div style='text-align:center;color:#334155;padding-top:8px;'>vs</div>", unsafe_allow_html=True)
-
         sf_winners[slot] = st.session_state.final_four.get(slot)
 
-        # Compare button
         if t1 and t2:
             ff_key = ("ff", slot)
             is_exp = st.session_state.expanded_matchup == ff_key
@@ -444,7 +376,6 @@ def render_final_four(df_stats):
                 render_comparison_panel(t1, t2, "ff", slot, 0, df_stats)
         st.markdown("<br>", unsafe_allow_html=True)
 
-    # Championship
     ct1, ct2 = sf_winners.get("sf1"), sf_winners.get("sf2")
     st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.3rem;color:#fbbf24;letter-spacing:0.1em;">🏆 National Championship</div>', unsafe_allow_html=True)
     c_a, c_vs, c_b = st.columns([5, 0.5, 5])
@@ -482,7 +413,9 @@ def render_final_four(df_stats):
         </div>""", unsafe_allow_html=True)
 
 def show():
-    st.markdown(DARK_CSS, unsafe_allow_html=True)
+    st.markdown("""<style>
+    [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
+    </style>""", unsafe_allow_html=True)
     st.markdown("# 🏆 Bracket Simulator")
     init_bracket()
 
