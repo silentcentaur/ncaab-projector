@@ -250,14 +250,18 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
 <body>
 <script>
 function sendClick(payload) {{
-    // Try postMessage first (works in some Streamlit versions)
+    // Approach 1: postMessage to Streamlit (works in some versions)
     window.parent.postMessage({{type: 'streamlit:setComponentValue', value: payload}}, '*');
-    // Also navigate parent URL with query param as reliable fallback
+    // Approach 2: Modify parent URL query params and reload
     try {{
-        var url = new URL(window.parent.location.href);
-        url.searchParams.set('bclick', encodeURIComponent(payload));
-        window.parent.location.href = url.toString();
-    }} catch(e) {{}}
+        var parentUrl = new URL(window.parent.location.href);
+        parentUrl.searchParams.set('bclick', encodeURIComponent(payload));
+        window.parent.history.pushState({{}}, '', parentUrl.toString());
+        window.parent.location.reload();
+    }} catch(e) {{
+        // Cross-origin fallback: navigate iframe src with payload in hash
+        window.location.hash = encodeURIComponent(payload);
+    }}
 }}
 </script>
 {inner}
@@ -376,31 +380,10 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
 
 def render_region_tab(region, df_stats, all_regions=False):
     regions = REGIONS if all_regions else [region]
-
-    # Handle query param clicks (picks AND compare both come through bclick)
-    params = st.query_params
-    if "bclick" in params:
-        import urllib.parse
-        payload = urllib.parse.unquote(params["bclick"])
-        parts = payload.split("|")
-        st.query_params.clear()
-        if len(parts) == 5 and parts[4] == "pick":
-            r_reg, r_idx, g_idx, slot = parts[0], int(parts[1]), int(parts[2]), int(parts[3])
-            team  = get_team_in_slot(r_reg, r_idx, g_idx, slot)
-            other = get_team_in_slot(r_reg, r_idx, g_idx, 1 - slot)
-            if team and other:
-                set_winner(r_reg, r_idx, g_idx, team)
-                st.rerun()
-        elif len(parts) == 4 and parts[3] == "cmp":
-            r_reg, r_idx, g_idx = parts[0], int(parts[1]), int(parts[2])
-            key = (r_reg, r_idx, g_idx)
-            st.session_state.expanded_matchup = None if st.session_state.expanded_matchup == key else key
-            st.rerun()
-
-    height = 1420 if all_regions else 640
-    html   = build_bracket_html(regions)
-    # Still read postMessage return value as backup
-    click  = components.html(html, height=height, scrolling=True)
+    height  = 1420 if all_regions else 640
+    html    = build_bracket_html(regions)
+    # postMessage return value — works in some Streamlit versions, no-op otherwise
+    click   = components.html(html, height=height, scrolling=True)
     if click and isinstance(click, str) and "|" in click:
         parts = click.split("|")
         if len(parts) == 5 and parts[4] == "pick":
@@ -489,6 +472,26 @@ def show():
     st.markdown('<style>[data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}</style>', unsafe_allow_html=True)
     st.markdown("# 🏆 Bracket Simulator")
     init_bracket()
+
+    # ── Handle clicks from bracket iframe (query params set by JS) ──────────
+    import urllib.parse
+    params = st.query_params
+    if "bclick" in params:
+        payload = urllib.parse.unquote(params["bclick"])
+        parts   = payload.split("|")
+        st.query_params.clear()
+        if len(parts) == 5 and parts[4] == "pick":
+            r_reg, r_idx, g_idx, slot = parts[0], int(parts[1]), int(parts[2]), int(parts[3])
+            team  = get_team_in_slot(r_reg, r_idx, g_idx, slot)
+            other = get_team_in_slot(r_reg, r_idx, g_idx, 1 - slot)
+            if team and other:
+                set_winner(r_reg, r_idx, g_idx, team)
+        elif len(parts) == 4 and parts[3] == "cmp":
+            r_reg, r_idx, g_idx = parts[0], int(parts[1]), int(parts[2])
+            key = (r_reg, r_idx, g_idx)
+            st.session_state.expanded_matchup = None if st.session_state.expanded_matchup == key else key
+        st.rerun()
+    # ────────────────────────────────────────────────────────────────────────
 
     df_stats = db.get_team_data()
     game_df  = db.get_game_history()
