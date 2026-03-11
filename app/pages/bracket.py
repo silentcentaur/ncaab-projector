@@ -149,11 +149,14 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
            transition: all 0.1s; }
 .cmp-btn:hover { border-color: #f97316; color: #f97316; }
 .divider { width: 1px; background: #1e3a5f; margin: 0 8px; align-self: stretch; flex-shrink: 0; }
+.bracket.mirrored { flex-direction: row-reverse; }
 """
 
+    MIRRORED = {"West", "Midwest"}
     inner = ""
     for i, region in enumerate(regions):
-        inner += f'<div class="region-block"><div class="region-title">{region}</div><div class="bracket">{build_region_rounds(region)}</div></div>'
+        mirror_cls = " mirrored" if region in MIRRORED else ""
+        inner += f'<div class="region-block"><div class="region-title">{region}</div><div class="bracket{mirror_cls}">{build_region_rounds(region)}</div></div>'
 
     return f"""<!DOCTYPE html>
 <html><head><style>{CSS}</style></head>
