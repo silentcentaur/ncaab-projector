@@ -120,7 +120,7 @@ def build_bracket_html(regions):
     CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto; padding: 8px; }
-.all-regions { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; min-width: max-content; }
+.all-regions { display: flex; gap: 20px; min-width: max-content; }
 .region-block { display: flex; flex-direction: column; }
 .region-title { font-family: 'Bebas Neue', cursive; font-size: 0.9rem; color: #f97316;
                 letter-spacing: 0.1em; margin-bottom: 6px; padding-left: 4px; border-left: 3px solid #f97316; padding-left: 6px; }
@@ -153,6 +153,8 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
 
     inner = ""
     for i, region in enumerate(regions):
+        if i > 0:
+            inner += '<div class="divider"></div>'
         inner += f'<div class="region-block"><div class="region-title">{region}</div><div class="bracket">{build_region_rounds(region)}</div></div>'
 
     return f"""<!DOCTYPE html>
@@ -265,8 +267,7 @@ def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stat
 def render_region_tab(region, df_stats, all_regions=False):
     regions = REGIONS if all_regions else [region]
     html    = build_bracket_html(regions)
-    height  = 1320 if all_regions else 620
-    click   = components.html(html, height=height, scrolling=True)
+    click   = components.html(html, height=620, scrolling=True)
 
     if click and isinstance(click, str) and "|" in click:
         parts = click.split("|")
