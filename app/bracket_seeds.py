@@ -1,11 +1,10 @@
 # 2026 NCAA Tournament bracket seeds
 # Source: Final tournament bracket
-# When two teams share a seed, one is picked as placeholder
 
 BRACKET_2026 = {
     "East": {
         1:  "Duke",
-        2:  "Michigan St.",
+        2:  "UConn",
         3:  "Michigan St.",
         4:  "Kansas",
         5:  "St. John's",
@@ -34,10 +33,10 @@ BRACKET_2026 = {
         10: "Missouri",
         11: "Texas",
         12: "High Point",
-        13: "Kennesaw St.",
-        14: "Queens",
-        15: "TEX/NCSU",
-        16: "Long Island",
+        13: "Hawaii",
+        14: "Kennesaw St.",
+        15: "Queens",
+        16: "LIU",
     },
     "South": {
         1:  "Florida",
