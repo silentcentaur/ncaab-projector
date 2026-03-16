@@ -9,7 +9,7 @@ import name_map as nm
 REGIONS = ["East", "West", "South", "Midwest"]
 SEEDS   = list(range(1, 17))
 FIRST_ROUND_PAIRS = [(1,16),(8,9),(5,12),(4,13),(6,11),(3,14),(7,10),(2,15)]
-SEEDS_VERSION = "2026-v8"
+SEEDS_VERSION = "2026-v9"
 ROUND_NAMES   = ["Round of 64", "Round of 32", "Sweet 16", "Elite 8"]
 
 def init_bracket():
@@ -304,7 +304,7 @@ def render_final_four(df_stats):
     st.markdown('<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1.8rem;color:#f97316;letter-spacing:0.1em;text-align:center;">🏆 FINAL FOUR & CHAMPIONSHIP</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    for r1, r2, slot in [("East","West","sf1"), ("South","Midwest","sf2")]:
+    for r1, r2, slot in [("East","South","sf1"), ("West","Midwest","sf2")]:
         t1 = get_winner(r1, 3, 0); t2 = get_winner(r2, 3, 0)
         st.markdown(f'<div style="font-family:monospace;font-size:0.7rem;color:#475569;text-transform:uppercase;margin-bottom:6px;">{r1} Champion vs {r2} Champion</div>', unsafe_allow_html=True)
         c_a, c_vs, c_b = st.columns([5, 0.5, 5])
