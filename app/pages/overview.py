@@ -129,33 +129,17 @@ def show():
         tourn_df["region"]   = tourn_df["team"].map(region_map)
         tourn_df["seed_str"] = tourn_df["seed"].astype(str)
 
-        # Seed filter + reset button
-        fc, rc = st.columns([6, 1])
-        with fc:
-            selected_seeds = st.multiselect(
-                "Filter by seed", options=list(range(1, 17)),
-                default=st.session_state.get("scatter_seeds", list(range(1, 17))),
-                key="scatter_seeds",
-            )
-        with rc:
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("↺ Reset", key="scatter_reset"):
-                st.session_state.scatter_seeds = list(range(1, 17))
-                st.rerun()
+        # Reset button — clears Plotly legend filtering by rerunning
+        if st.button("↺ Reset selection", key="scatter_reset"):
+            st.rerun()
 
-        plot_df = tourn_df[tourn_df["seed"].isin(selected_seeds)].copy() if selected_seeds else tourn_df.copy()
+        plot_df = tourn_df.copy()
 
         # 8 visually distinct colors, cycling so adjacent seeds never match
         PALETTE = ["#fbbf24","#ef4444","#a78bfa","#38bdf8","#f97316","#22c55e","#e879f9","#60a5fa"]
         SEED_COLORS = {s: PALETTE[(s - 1) % 8] for s in range(1, 17)}
         color_map = {str(s): SEED_COLORS[s] for s in range(1, 17)}
         plot_df["label"] = plot_df["seed"].astype(str)
-
-        # Dynamic axis ranges with padding
-        pad_x = (plot_df["adj_oe"].max() - plot_df["adj_oe"].min()) * 0.08 + 1
-        pad_y = (plot_df["adj_de"].max() - plot_df["adj_de"].min()) * 0.08 + 1
-        x_range = [plot_df["adj_oe"].min() - pad_x, plot_df["adj_oe"].max() + pad_x]
-        y_range = [plot_df["adj_de"].min() - pad_y, plot_df["adj_de"].max() + pad_y]
 
         fig = px.scatter(
             plot_df, x="adj_oe", y="adj_de",
@@ -166,8 +150,8 @@ def show():
             labels={"adj_oe":"Adj. Offensive Efficiency","adj_de":"Adj. Defensive Efficiency","seed_str":"Seed"},
             category_orders={"seed_str": [str(s) for s in range(1, 17)]},
         )
-        fig.update_yaxes(range=[y_range[1], y_range[0]], **GRID)
-        fig.update_xaxes(range=x_range, **GRID)
+        fig.update_yaxes(autorange="reversed", **GRID)
+        fig.update_xaxes(**GRID)
         fig.update_traces(
             marker=dict(size=12, opacity=0.9),
             textposition="middle center",
@@ -185,14 +169,14 @@ def show():
         med_oe = plot_df["adj_oe"].median(); med_de = plot_df["adj_de"].median()
         for val, axis in [(med_oe,"x"),(med_de,"y")]:
             fig.add_shape(type="line",
-                x0=val if axis=="x" else x_range[0],
-                x1=val if axis=="x" else x_range[1],
-                y0=val if axis=="y" else y_range[0],
-                y1=val if axis=="y" else y_range[1],
+                x0=val if axis=="x" else plot_df["adj_oe"].min(),
+                x1=val if axis=="x" else plot_df["adj_oe"].max(),
+                y0=val if axis=="y" else plot_df["adj_de"].min(),
+                y1=val if axis=="y" else plot_df["adj_de"].max(),
                 line=dict(color="#1e2d45", width=1, dash="dot"))
 
-        x_max=x_range[1]-1; x_min=x_range[0]+1
-        y_max=y_range[1]-0.5; y_min=y_range[0]+0.5
+        x_max=plot_df["adj_oe"].max(); x_min=plot_df["adj_oe"].min()
+        y_max=plot_df["adj_de"].max(); y_min=plot_df["adj_de"].min()
         for text, x, y, anchor in [
             ("ELITE",        x_max, y_min, "right"),
             ("GOOD OFFENSE", x_max, y_max, "right"),
