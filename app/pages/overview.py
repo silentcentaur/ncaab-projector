@@ -113,37 +113,55 @@ def show():
     st.markdown("### 📍 Efficiency Landscape")
     st.markdown('<div class="tag">Offense vs Defense · All D1 Teams</div><br>', unsafe_allow_html=True)
 
-    if "adj_oe" in df.columns and "adj_de" in df.columns and "conference" in df.columns:
-        confs     = sorted(df["conference"].dropna().unique().tolist())
-        color_map = {c: CONF_COLORS[i % len(CONF_COLORS)] for i, c in enumerate(confs)}
-        top25_set = set(df.nlargest(25, "net_eff")["team"].tolist()) if "net_eff" in df.columns else set()
-        df["label"] = df["team"].apply(lambda t: t if t in top25_set else "")
+    if "adj_oe" in df.columns and "adj_de" in df.columns:
+        from bracket_seeds import BRACKET_2026
+
+        seed_map   = {}
+        region_map = {}
+        for region, seeds in BRACKET_2026.items():
+            for seed, team in seeds.items():
+                if team:
+                    seed_map[team]   = seed
+                    region_map[team] = region
+
+        tourn_df = df[df["team"].isin(seed_map)].copy()
+        tourn_df["seed"]     = tourn_df["team"].map(seed_map)
+        tourn_df["region"]   = tourn_df["team"].map(region_map)
+        tourn_df["seed_str"] = tourn_df["seed"].astype(str)
+
+        SEED_COLORS = {
+            1:  "#fbbf24", 2:  "#f97316", 3:  "#ef4444", 4:  "#e879f9",
+            5:  "#a78bfa", 6:  "#60a5fa", 7:  "#38bdf8", 8:  "#34d399",
+            9:  "#4ade80", 10: "#84cc16", 11: "#facc15", 12: "#fb923c",
+            13: "#f472b6", 14: "#94a3b8", 15: "#64748b", 16: "#475569",
+        }
+        color_map = {str(s): SEED_COLORS[s] for s in range(1, 17)}
 
         fig = px.scatter(
-            df, x="adj_oe", y="adj_de",
-            hover_name="team", color="conference",
-            color_discrete_map=color_map, text="label",
-            hover_data={c: True for c in ["record","net_eff","conference"] if c in df.columns},
-            labels={"adj_oe":"Adj. Offensive Efficiency","adj_de":"Adj. Defensive Efficiency","conference":"Conference"},
+            tourn_df, x="adj_oe", y="adj_de",
+            hover_name="team", color="seed_str",
+            color_discrete_map=color_map,
+            text="team",
+            hover_data={c: True for c in ["record","net_eff","region","seed"] if c in tourn_df.columns},
+            labels={"adj_oe":"Adj. Offensive Efficiency","adj_de":"Adj. Defensive Efficiency","seed_str":"Seed"},
+            category_orders={"seed_str": [str(s) for s in range(1, 17)]},
         )
         fig.update_yaxes(autorange="reversed", **GRID)
         fig.update_xaxes(**GRID)
-        fig.update_traces(marker=dict(size=7, opacity=0.8), textposition="top center")
+        fig.update_traces(marker=dict(size=9, opacity=0.9), textposition="top center",
+                          textfont=dict(size=8))
 
-        for trace in fig.data:
-            trace.textfont = dict(size=8, color=color_map.get(trace.name, "#94a3b8"))
-
-        med_oe = df["adj_oe"].median(); med_de = df["adj_de"].median()
+        med_oe = tourn_df["adj_oe"].median(); med_de = tourn_df["adj_de"].median()
         for val, axis in [(med_oe,"x"),(med_de,"y")]:
             fig.add_shape(type="line",
-                x0=val if axis=="x" else df["adj_oe"].min(),
-                x1=val if axis=="x" else df["adj_oe"].max(),
-                y0=val if axis=="y" else df["adj_de"].min(),
-                y1=val if axis=="y" else df["adj_de"].max(),
+                x0=val if axis=="x" else tourn_df["adj_oe"].min(),
+                x1=val if axis=="x" else tourn_df["adj_oe"].max(),
+                y0=val if axis=="y" else tourn_df["adj_de"].min(),
+                y1=val if axis=="y" else tourn_df["adj_de"].max(),
                 line=dict(color="#1e2d45", width=1, dash="dot"))
 
-        x_max=df["adj_oe"].max(); x_min=df["adj_oe"].min()
-        y_max=df["adj_de"].max(); y_min=df["adj_de"].min()
+        x_max=tourn_df["adj_oe"].max(); x_min=tourn_df["adj_oe"].min()
+        y_max=tourn_df["adj_de"].max(); y_min=tourn_df["adj_de"].min()
         for text, x, y, anchor in [
             ("ELITE",        x_max-1, y_min+0.5, "right"),
             ("GOOD OFFENSE", x_max-1, y_max-0.5, "right"),
@@ -153,10 +171,10 @@ def show():
             fig.add_annotation(x=x, y=y, text=text, showarrow=False,
                                font=dict(size=9, color="#1e2d45"), xanchor=anchor)
 
-        fig.update_layout(**PLOT_THEME, height=520,
-                          legend=dict(font=dict(size=10), itemsizing="constant", bgcolor="rgba(0,0,0,0)"))
+        fig.update_layout(**PLOT_THEME, height=580,
+                          legend=dict(title="Seed", font=dict(size=10), itemsizing="constant", bgcolor="rgba(0,0,0,0)"))
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click a conference in the legend to isolate it</div><br>', unsafe_allow_html=True)
+        st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click a seed in the legend to isolate it</div><br>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
