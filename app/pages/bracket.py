@@ -163,8 +163,18 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
 <body>
 <script>
 function sendClick(payload) {{
-    window.parent.postMessage({{type: 'streamlit:setComponentValue', value: payload}}, '*');
+    window.parent.postMessage({{
+        isStreamlitMessage: true,
+        type: 'streamlit:setComponentValue',
+        value: payload
+    }}, '*');
 }}
+window.addEventListener('message', function(e) {{
+    if (e.data && e.data.type === 'streamlit:render') {{
+        window.parent.postMessage({{isStreamlitMessage: true, type: 'streamlit:componentReady', apiVersion: 1}}, '*');
+    }}
+}});
+window.parent.postMessage({{isStreamlitMessage: true, type: 'streamlit:componentReady', apiVersion: 1}}, '*');
 </script>
 <div class="all-regions">{inner}</div>
 </body></html>"""
