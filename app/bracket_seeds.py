@@ -16,7 +16,7 @@ BRACKET_2026 = {
         10: "UCF",
         11: "South Florida",
         12: "Northern Iowa",
-        13: "CA Baptist",
+        13: "Cal Baptist",
         14: "N Dakota St.",
         15: "Furman",
         16: "Siena",
