@@ -111,7 +111,7 @@ def show():
 
     # ── Efficiency scatter ────────────────────────────────────────────────────
     st.markdown("### 📍 Efficiency Landscape")
-    st.markdown('<div class="tag">Offense vs Defense · All D1 Teams</div><br>', unsafe_allow_html=True)
+    st.markdown('<div class="tag">Offense vs Defense · NCAA Tournament Teams</div><br>', unsafe_allow_html=True)
 
     if "adj_oe" in df.columns and "adj_de" in df.columns:
         from bracket_seeds import BRACKET_2026
@@ -129,30 +129,52 @@ def show():
         tourn_df["region"]   = tourn_df["team"].map(region_map)
         tourn_df["seed_str"] = tourn_df["seed"].astype(str)
 
+        # Seed filter + reset button
+        fc, rc = st.columns([6, 1])
+        with fc:
+            selected_seeds = st.multiselect(
+                "Filter by seed", options=list(range(1, 17)),
+                default=st.session_state.get("scatter_seeds", list(range(1, 17))),
+                key="scatter_seeds",
+            )
+        with rc:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("↺ Reset", key="scatter_reset"):
+                st.session_state.scatter_seeds = list(range(1, 17))
+                st.rerun()
+
+        plot_df = tourn_df[tourn_df["seed"].isin(selected_seeds)].copy() if selected_seeds else tourn_df.copy()
+
         # 8 visually distinct colors, cycling so adjacent seeds never match
         PALETTE = ["#fbbf24","#ef4444","#a78bfa","#38bdf8","#f97316","#22c55e","#e879f9","#60a5fa"]
         SEED_COLORS = {s: PALETTE[(s - 1) % 8] for s in range(1, 17)}
         color_map = {str(s): SEED_COLORS[s] for s in range(1, 17)}
-        tourn_df["label"] = tourn_df["seed"].astype(str)
+        plot_df["label"] = plot_df["seed"].astype(str)
+
+        # Dynamic axis ranges with padding
+        pad_x = (plot_df["adj_oe"].max() - plot_df["adj_oe"].min()) * 0.08 + 1
+        pad_y = (plot_df["adj_de"].max() - plot_df["adj_de"].min()) * 0.08 + 1
+        x_range = [plot_df["adj_oe"].min() - pad_x, plot_df["adj_oe"].max() + pad_x]
+        y_range = [plot_df["adj_de"].min() - pad_y, plot_df["adj_de"].max() + pad_y]
 
         fig = px.scatter(
-            tourn_df, x="adj_oe", y="adj_de",
+            plot_df, x="adj_oe", y="adj_de",
             hover_name="team", color="seed_str",
             color_discrete_map=color_map,
             text="label",
-            hover_data={c: True for c in ["record","net_eff","region","seed"] if c in tourn_df.columns},
+            hover_data={c: True for c in ["record","net_eff","region","seed"] if c in plot_df.columns},
             labels={"adj_oe":"Adj. Offensive Efficiency","adj_de":"Adj. Defensive Efficiency","seed_str":"Seed"},
             category_orders={"seed_str": [str(s) for s in range(1, 17)]},
         )
-        fig.update_yaxes(autorange="reversed", **GRID)
-        fig.update_xaxes(**GRID)
+        fig.update_yaxes(range=[y_range[1], y_range[0]], **GRID)
+        fig.update_xaxes(range=x_range, **GRID)
         fig.update_traces(
             marker=dict(size=12, opacity=0.9),
             textposition="middle center",
             textfont=dict(size=8, color="#0a0f1e"),
             mode="markers+text",
         )
-        for _, row in tourn_df.iterrows():
+        for _, row in plot_df.iterrows():
             fig.add_annotation(
                 x=row["adj_oe"], y=row["adj_de"],
                 text=row["team"], showarrow=False,
@@ -160,22 +182,22 @@ def show():
                 xanchor="center",
             )
 
-        med_oe = tourn_df["adj_oe"].median(); med_de = tourn_df["adj_de"].median()
+        med_oe = plot_df["adj_oe"].median(); med_de = plot_df["adj_de"].median()
         for val, axis in [(med_oe,"x"),(med_de,"y")]:
             fig.add_shape(type="line",
-                x0=val if axis=="x" else tourn_df["adj_oe"].min(),
-                x1=val if axis=="x" else tourn_df["adj_oe"].max(),
-                y0=val if axis=="y" else tourn_df["adj_de"].min(),
-                y1=val if axis=="y" else tourn_df["adj_de"].max(),
+                x0=val if axis=="x" else x_range[0],
+                x1=val if axis=="x" else x_range[1],
+                y0=val if axis=="y" else y_range[0],
+                y1=val if axis=="y" else y_range[1],
                 line=dict(color="#1e2d45", width=1, dash="dot"))
 
-        x_max=tourn_df["adj_oe"].max(); x_min=tourn_df["adj_oe"].min()
-        y_max=tourn_df["adj_de"].max(); y_min=tourn_df["adj_de"].min()
+        x_max=x_range[1]-1; x_min=x_range[0]+1
+        y_max=y_range[1]-0.5; y_min=y_range[0]+0.5
         for text, x, y, anchor in [
-            ("ELITE",        x_max-1, y_min+0.5, "right"),
-            ("GOOD OFFENSE", x_max-1, y_max-0.5, "right"),
-            ("GOOD DEFENSE", x_min+1, y_min+0.5, "left"),
-            ("REBUILDING",   x_min+1, y_max-0.5, "left"),
+            ("ELITE",        x_max, y_min, "right"),
+            ("GOOD OFFENSE", x_max, y_max, "right"),
+            ("GOOD DEFENSE", x_min, y_min, "left"),
+            ("REBUILDING",   x_min, y_max, "left"),
         ]:
             fig.add_annotation(x=x, y=y, text=text, showarrow=False,
                                font=dict(size=9, color="#1e2d45"), xanchor=anchor)
@@ -183,9 +205,9 @@ def show():
         fig.update_layout(**PLOT_THEME, height=640,
                           legend=dict(title="Seed", font=dict(size=10), itemsizing="constant", bgcolor="rgba(0,0,0,0)"))
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click a seed in the legend to isolate it</div><br>', unsafe_allow_html=True)
+        st.markdown('<div style="font-family:monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Use the filter above or double-click a seed in the legend to isolate it</div><br>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Best offense vs best defense ──────────────────────────────────────────
     st.markdown("### ⚡ Best Offenses vs Best Defenses")
