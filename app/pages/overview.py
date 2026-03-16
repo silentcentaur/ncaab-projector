@@ -129,10 +129,6 @@ def show():
         tourn_df["region"]   = tourn_df["team"].map(region_map)
         tourn_df["seed_str"] = tourn_df["seed"].astype(str)
 
-        # Reset button — clears Plotly legend filtering by rerunning
-        if st.button("↺ Reset selection", key="scatter_reset"):
-            st.rerun()
-
         plot_df = tourn_df.copy()
 
         # 8 visually distinct colors, cycling so adjacent seeds never match
@@ -189,7 +185,7 @@ def show():
         fig.update_layout(**PLOT_THEME, height=640,
                           legend=dict(title="Seed", font=dict(size=10), itemsizing="constant", bgcolor="rgba(0,0,0,0)"))
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('<div style="font-family:monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Use the filter above or double-click a seed in the legend to isolate it</div><br>', unsafe_allow_html=True)
+        st.markdown('<div style="font-family:monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click any seed in the legend to isolate it · Double-click again to reset</div><br>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
