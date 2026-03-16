@@ -5,7 +5,8 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
 import name_map as nm
-from pages.matchup import compute_win_prob, expected_score, DEFAULTS, logistic
+import bracket_seeds as bs
+from pages.matchup import compute_win_prob, compute_upset_signals, expected_score, DEFAULTS, logistic
 
 MAX_SLOTS = 4
 
@@ -92,7 +93,27 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     games_a = nm.get_team_games(game_df, df, team_a)
     games_b = nm.get_team_games(game_df, df, team_b)
 
-    pa, pb = compute_win_prob(ra, rb, "Neutral", weights, games_a, games_b)
+    pa_base, pb_base = compute_win_prob(ra, rb, "Neutral", weights, games_a, games_b)
+
+    # Derive rank from net_eff across full dataset
+    df["_net_eff_num"] = pd.to_numeric(df["net_eff"], errors="coerce")
+    df["_rank"] = df["_net_eff_num"].rank(ascending=False, method="min").astype("Int64")
+    rank_a = int(df.loc[df["team"] == team_a, "_rank"].iloc[0]) if team_a in df["team"].values else None
+    rank_b = int(df.loc[df["team"] == team_b, "_rank"].iloc[0]) if team_b in df["team"].values else None
+
+    seed_a_val, _ = bs.get_seed(team_a)
+    seed_b_val, _ = bs.get_seed(team_b)
+    # Fall back to seed_map (built from bracket) if get_seed misses
+    if seed_a_val is None: seed_a_val = seed_map.get(team_a)
+    if seed_b_val is None: seed_b_val = seed_map.get(team_b)
+
+    adjustment, _ = compute_upset_signals(ra, rb, games_a, games_b,
+                                          seed_override_a=seed_a_val,
+                                          seed_override_b=seed_b_val,
+                                          rank_override_a=rank_a,
+                                          rank_override_b=rank_b)
+    pa = round(float(np.clip(pa_base + adjustment, 0.05, 0.95)), 4)
+    pb = round(1 - pa, 4)
 
     def g(row, col, default=None):
         v = row.get(col)
