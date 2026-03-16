@@ -5,7 +5,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
 import name_map as nm
-from matchup import compute_win_prob, expected_score, DEFAULTS, logistic
+from pages.matchup import compute_win_prob, expected_score, DEFAULTS, logistic
 
 MAX_SLOTS = 4
 
