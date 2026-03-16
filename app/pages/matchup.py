@@ -293,6 +293,16 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
     return adjustment, signals
 
 
+def confidence_label(pa):
+    """Return (text, color) confidence tier label based on favorite's win probability."""
+    p = max(pa, 1 - pa)  # always use the higher probability
+    if p < 0.55:   return "Toss-up",         "#a78bfa"
+    if p < 0.65:   return "Lean",             "#06b6d4"
+    if p < 0.75:   return "Moderate favorite","#f97316"
+    if p < 0.85:   return "Strong favorite",  "#f97316"
+    return             "Heavy favorite",      "#ef4444"
+
+
 def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, adjustment, signals,
                             seed_a=None, region_a=None, seed_b=None, region_b=None):
     """Render the upset signal breakdown expander in the Streamlit UI."""
@@ -469,6 +479,7 @@ def show():
     pb = round(1 - pa, 4)
 
     # ── Win probability banner ────────────────────────────────────────────────
+    tier_label, tier_color = confidence_label(pa)
     st.markdown(f"""
     <div class="matchup-banner">
         <div style="display:flex;justify-content:space-around;align-items:center;">
@@ -477,7 +488,15 @@ def show():
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:3.5rem;color:#f97316;">{pa*100:.1f}%</div>
                 <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:#64748b;">WIN PROBABILITY</div>
             </div>
-            <div style="font-size:1.2rem;color:#334155;">VS</div>
+            <div style="text-align:center;">
+                <div style="display:inline-block;padding:4px 12px;border-radius:20px;
+                            background:{tier_color}22;border:1px solid {tier_color}66;
+                            font-family:'DM Mono',monospace;font-size:0.65rem;
+                            color:{tier_color};letter-spacing:0.08em;margin-bottom:8px;">
+                    {tier_label.upper()}
+                </div>
+                <div style="font-size:1.2rem;color:#334155;">VS</div>
+            </div>
             <div>
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;">{team_b}</div>
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:3.5rem;color:#64748b;">{pb*100:.1f}%</div>

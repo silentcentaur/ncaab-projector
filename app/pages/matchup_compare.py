@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
 import name_map as nm
 import bracket_seeds as bs
-from pages.matchup import compute_win_prob, compute_upset_signals, expected_score, DEFAULTS, logistic
+from pages.matchup import compute_win_prob, compute_upset_signals, confidence_label, expected_score, DEFAULTS, logistic
 
 MAX_SLOTS = 4
 
@@ -143,6 +143,7 @@ def win_prob_card(result):
     favored = result["team_a"] if pa >= pb else result["team_b"]
     seed_a = f'<span style="font-size:0.7rem;color:#64748b;"> #{result["seed_a"]}</span>' if result["seed_a"] else ""
     seed_b = f'<span style="font-size:0.7rem;color:#64748b;"> #{result["seed_b"]}</span>' if result["seed_b"] else ""
+    tier_label, tier_color = confidence_label(pa)
     return f"""
     <div style="background:#111827;border:1px solid #1e2d45;border-radius:8px;padding:1rem;margin-bottom:0.5rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
@@ -151,7 +152,15 @@ def win_prob_card(result):
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:{ca};">{pa*100:.0f}%</div>
                 <div style="font-family:'DM Mono',monospace;font-size:0.55rem;color:#475569;">{result["record_a"]}</div>
             </div>
-            <div style="text-align:center;color:#334155;font-size:0.8rem;">vs</div>
+            <div style="text-align:center;">
+                <div style="display:inline-block;padding:3px 10px;border-radius:20px;
+                            background:{tier_color}22;border:1px solid {tier_color}66;
+                            font-family:'DM Mono',monospace;font-size:0.55rem;
+                            color:{tier_color};letter-spacing:0.06em;margin-bottom:6px;">
+                    {tier_label.upper()}
+                </div>
+                <div style="color:#334155;font-size:0.8rem;">vs</div>
+            </div>
             <div style="text-align:right;">
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#f1f5f9;">{result["team_b"]}{seed_b}</div>
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:{cb};">{pb*100:.0f}%</div>
