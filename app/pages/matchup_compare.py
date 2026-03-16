@@ -38,6 +38,10 @@ def seed_buttons(teams, df, seed_map, bracket_seeds):
                 while len(new_slots) < MAX_SLOTS:
                     new_slots.append({"a": None, "b": None})
                 st.session_state.cmp_slots = new_slots
+                # Write directly to selectbox keys to override cached widget state
+                for i, slot in enumerate(new_slots):
+                    st.session_state[f"slot_{i}_a"] = slot["a"]
+                    st.session_state[f"slot_{i}_b"] = slot["b"]
                 st.rerun()
 
 def render_slot(idx, teams, df, game_df, weights, seed_map):
