@@ -129,27 +129,36 @@ def show():
         tourn_df["region"]   = tourn_df["team"].map(region_map)
         tourn_df["seed_str"] = tourn_df["seed"].astype(str)
 
-        SEED_COLORS = {
-            1:  "#fbbf24", 2:  "#f97316", 3:  "#ef4444", 4:  "#e879f9",
-            5:  "#a78bfa", 6:  "#60a5fa", 7:  "#38bdf8", 8:  "#34d399",
-            9:  "#4ade80", 10: "#84cc16", 11: "#facc15", 12: "#fb923c",
-            13: "#f472b6", 14: "#94a3b8", 15: "#64748b", 16: "#475569",
-        }
+        # 8 visually distinct colors, cycling so adjacent seeds never match
+        PALETTE = ["#fbbf24","#ef4444","#a78bfa","#38bdf8","#f97316","#22c55e","#e879f9","#60a5fa"]
+        SEED_COLORS = {s: PALETTE[(s - 1) % 8] for s in range(1, 17)}
         color_map = {str(s): SEED_COLORS[s] for s in range(1, 17)}
+        tourn_df["label"] = tourn_df["seed"].astype(str)
 
         fig = px.scatter(
             tourn_df, x="adj_oe", y="adj_de",
             hover_name="team", color="seed_str",
             color_discrete_map=color_map,
-            text="team",
+            text="label",
             hover_data={c: True for c in ["record","net_eff","region","seed"] if c in tourn_df.columns},
             labels={"adj_oe":"Adj. Offensive Efficiency","adj_de":"Adj. Defensive Efficiency","seed_str":"Seed"},
             category_orders={"seed_str": [str(s) for s in range(1, 17)]},
         )
         fig.update_yaxes(autorange="reversed", **GRID)
         fig.update_xaxes(**GRID)
-        fig.update_traces(marker=dict(size=9, opacity=0.9), textposition="top center",
-                          textfont=dict(size=8))
+        fig.update_traces(
+            marker=dict(size=12, opacity=0.9),
+            textposition="middle center",
+            textfont=dict(size=8, color="#0a0f1e"),
+            mode="markers+text",
+        )
+        for _, row in tourn_df.iterrows():
+            fig.add_annotation(
+                x=row["adj_oe"], y=row["adj_de"],
+                text=row["team"], showarrow=False,
+                yshift=14, font=dict(size=8, color="#94a3b8"),
+                xanchor="center",
+            )
 
         med_oe = tourn_df["adj_oe"].median(); med_de = tourn_df["adj_de"].median()
         for val, axis in [(med_oe,"x"),(med_de,"y")]:
@@ -171,7 +180,7 @@ def show():
             fig.add_annotation(x=x, y=y, text=text, showarrow=False,
                                font=dict(size=9, color="#1e2d45"), xanchor=anchor)
 
-        fig.update_layout(**PLOT_THEME, height=580,
+        fig.update_layout(**PLOT_THEME, height=640,
                           legend=dict(title="Seed", font=dict(size=10), itemsizing="constant", bgcolor="rgba(0,0,0,0)"))
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click a seed in the legend to isolate it</div><br>', unsafe_allow_html=True)
