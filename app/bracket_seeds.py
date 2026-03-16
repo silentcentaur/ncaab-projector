@@ -1,6 +1,18 @@
 # 2026 NCAA Tournament bracket seeds
 # Source: Final tournament bracket
 
+def get_seed(team_name: str) -> tuple:
+    """
+    Returns (seed, region) for a tournament team, or (None, None) if not found.
+    Case-insensitive, strips extra whitespace.
+    """
+    name = team_name.strip().lower()
+    for region, teams in BRACKET_2026.items():
+        for seed, t in teams.items():
+            if t.strip().lower() == name:
+                return seed, region
+    return None, None
+
 BRACKET_2026 = {
     "East": {
         1:  "Duke",

@@ -5,6 +5,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
 import name_map as nm
+import bracket_seeds as bs
 
 def logistic(x): return 1 / (1 + np.exp(-x))
 
@@ -150,7 +151,7 @@ def _seed_relative(value, expected_for_seed, scale, invert=False):
     diff = expected_for_seed - value if invert else value - expected_for_seed
     return diff / scale
 
-def compute_upset_signals(ra, rb, games_a, games_b):
+def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_override_b=None):
     """
     Compute per-signal scores for team_a vs team_b.
     Every signal measures how much each team over/underperforms their seed expectation.
@@ -162,7 +163,8 @@ def compute_upset_signals(ra, rb, games_a, games_b):
         adjustment (float): probability nudge for team_a, capped at ±0.12
         signals    (list):  per-signal breakdown dicts for UI rendering
     """
-    seed_a  = _safe(ra, "seed");  seed_b  = _safe(rb, "seed")
+    seed_a  = _safe(ra, "seed") or seed_override_a
+    seed_b  = _safe(rb, "seed") or seed_override_b
     trank_a = _safe(ra, "barthag_rk") or _safe(ra, "trank") or _safe(ra, "rk")
     trank_b = _safe(rb, "barthag_rk") or _safe(rb, "trank") or _safe(rb, "rk")
     adj_oe_a = _safe(ra, "adj_oe", 100); adj_oe_b = _safe(rb, "adj_oe", 100)
@@ -290,19 +292,26 @@ def compute_upset_signals(ra, rb, games_a, games_b):
     return adjustment, signals
 
 
-def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, adjustment, signals):
+def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, adjustment, signals,
+                            seed_a=None, region_a=None, seed_b=None, region_b=None):
     """Render the upset signal breakdown expander in the Streamlit UI."""
     direction = "▲" if adjustment > 0 else ("▼" if adjustment < 0 else "–")
     favored   = team_a if adjustment > 0 else (team_b if adjustment < 0 else "Neither")
     adj_pp    = abs(adjustment) * 100
+
+    seed_str_a = f"#{seed_a} {region_a}" if seed_a else "not seeded"
+    seed_str_b = f"#{seed_b} {region_b}" if seed_b else "not seeded"
 
     with st.expander(f"🔬  Upset Signal Analysis  ·  {direction} {adj_pp:.1f}pp adjustment ({favored})", expanded=False):
         no_seed = any(s.get("no_seed") for s in signals)
         seed_note = " · <span style='color:#f97316;'>no seeds set — using T-Rank relative mode</span>" if no_seed else ""
         st.markdown(
             f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;'
-            f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">'
-            f'Base probability adjusted from {pa_base*100:.1f}% → {pa_adj*100:.1f}% for {team_a}{seed_note}</div>',
+            f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">'
+            f'Base probability adjusted from {pa_base*100:.1f}% → {pa_adj*100:.1f}% for {team_a}{seed_note}</div>'
+            f'<div style="font-family:\'DM Mono\',monospace;font-size:0.6rem;color:#334155;margin-bottom:1rem;">'
+            f'<span style="color:#f97316;">{team_a}</span> {seed_str_a} &nbsp;·&nbsp; '
+            f'<span style="color:#06b6d4;">{team_b}</span> {seed_str_b}</div>',
             unsafe_allow_html=True
         )
 
@@ -442,7 +451,11 @@ def show():
     pa_base, pb_base = compute_win_prob(ra, rb, venue, weights, games_a, games_b)
 
     # ── Upset signal adjustment ───────────────────────────────────────────────
-    adjustment, signals = compute_upset_signals(ra, rb, games_a, games_b)
+    seed_a, region_a = bs.get_seed(team_a)
+    seed_b, region_b = bs.get_seed(team_b)
+    adjustment, signals = compute_upset_signals(ra, rb, games_a, games_b,
+                                                seed_override_a=seed_a,
+                                                seed_override_b=seed_b)
     pa = round(float(np.clip(pa_base + adjustment, 0.05, 0.95)), 4)
     pb = round(1 - pa, 4)
 
@@ -475,7 +488,9 @@ def show():
     </div>""", unsafe_allow_html=True)
 
     # ── Upset signal breakdown ────────────────────────────────────────────────
-    render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa, pb, adjustment, signals)
+    render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa, pb, adjustment, signals,
+                            seed_a=seed_a, region_a=region_a,
+                            seed_b=seed_b, region_b=region_b)
 
     # ── Projected score ───────────────────────────────────────────────────────
     oe_a=float(ra.get("adj_oe") or 100); de_a=float(ra.get("adj_de") or 100)
