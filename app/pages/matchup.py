@@ -151,7 +151,8 @@ def _seed_relative(value, expected_for_seed, scale, invert=False):
     diff = expected_for_seed - value if invert else value - expected_for_seed
     return diff / scale
 
-def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_override_b=None):
+def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_override_b=None,
+                          rank_override_a=None, rank_override_b=None):
     """
     Compute per-signal scores for team_a vs team_b.
     Every signal measures how much each team over/underperforms their seed expectation.
@@ -165,8 +166,8 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
     """
     seed_a  = _safe(ra, "seed") or seed_override_a
     seed_b  = _safe(rb, "seed") or seed_override_b
-    trank_a = _safe(ra, "barthag_rk") or _safe(ra, "trank") or _safe(ra, "rk")
-    trank_b = _safe(rb, "barthag_rk") or _safe(rb, "trank") or _safe(rb, "rk")
+    trank_a = _safe(ra, "barthag_rk") or _safe(ra, "trank") or _safe(ra, "rk") or rank_override_a
+    trank_b = _safe(rb, "barthag_rk") or _safe(rb, "trank") or _safe(rb, "rk") or rank_override_b
     adj_oe_a = _safe(ra, "adj_oe", 100); adj_oe_b = _safe(rb, "adj_oe", 100)
     adj_de_a = _safe(ra, "adj_de", 100); adj_de_b = _safe(rb, "adj_de", 100)
     tempo_a  = _safe(ra, "adj_tempo", AVG_TEMPO)
@@ -444,6 +445,12 @@ def show():
     ra = df[df["team"] == team_a].iloc[0]
     rb = df[df["team"] == team_b].iloc[0]
 
+    # Derive T-Rank proxy from net_eff — rank 1 = highest net efficiency in dataset
+    df["_net_eff_num"] = pd.to_numeric(df["net_eff"], errors="coerce")
+    df["_rank"] = df["_net_eff_num"].rank(ascending=False, method="min").astype("Int64")
+    rank_a = int(df.loc[df["team"] == team_a, "_rank"].iloc[0]) if team_a in df["team"].values else None
+    rank_b = int(df.loc[df["team"] == team_b, "_rank"].iloc[0]) if team_b in df["team"].values else None
+
     # Get game history using name map
     games_a = nm.get_team_games(game_df, df, team_a)
     games_b = nm.get_team_games(game_df, df, team_b)
@@ -455,7 +462,9 @@ def show():
     seed_b, region_b = bs.get_seed(team_b)
     adjustment, signals = compute_upset_signals(ra, rb, games_a, games_b,
                                                 seed_override_a=seed_a,
-                                                seed_override_b=seed_b)
+                                                seed_override_b=seed_b,
+                                                rank_override_a=rank_a,
+                                                rank_override_b=rank_b)
     pa = round(float(np.clip(pa_base + adjustment, 0.05, 0.95)), 4)
     pb = round(1 - pa, 4)
 
