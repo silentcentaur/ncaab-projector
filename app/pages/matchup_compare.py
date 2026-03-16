@@ -34,27 +34,39 @@ def seed_buttons(teams, df, seed_map, bracket_seeds):
                     ta = seeds.get(s1)
                     tb = seeds.get(s2)
                     new_slots.append({"a": ta, "b": tb})
+                # Pad to 4 slots if fewer than 4 regions returned valid pairs
+                while len(new_slots) < MAX_SLOTS:
+                    new_slots.append({"a": None, "b": None})
                 st.session_state.cmp_slots = new_slots
                 st.rerun()
 
 def render_slot(idx, teams, df, game_df, weights, seed_map):
     slot = st.session_state.cmp_slots[idx]
 
+    # Pre-populate session state keys so selectbox reflects seeded values
+    key_a, key_b = f"slot_{idx}_a", f"slot_{idx}_b"
+    if slot["a"] and slot["a"] in teams:
+        st.session_state[key_a] = slot["a"]
+    if slot["b"] and slot["b"] in teams:
+        st.session_state[key_b] = slot["b"]
+
     # Team pickers
     c1, cv, c2, cx = st.columns([5, 0.6, 5, 0.4])
     with c1:
         team_a = st.selectbox(
-            f"Team A", teams,
-            index=teams.index(slot["a"]) if slot["a"] in teams else None,
-            placeholder="Search...", key=f"slot_{idx}_a", label_visibility="collapsed"
+            "Team A", [None] + teams,
+            index=([None] + teams).index(slot["a"]) if slot["a"] in teams else 0,
+            format_func=lambda x: "Search..." if x is None else x,
+            key=key_a, label_visibility="collapsed"
         )
     with cv:
         st.markdown("<div style='text-align:center;color:#334155;padding-top:0.4rem;font-size:1.1rem;'>vs</div>", unsafe_allow_html=True)
     with c2:
         team_b = st.selectbox(
-            f"Team B", teams,
-            index=teams.index(slot["b"]) if slot["b"] in teams else None,
-            placeholder="Search...", key=f"slot_{idx}_b", label_visibility="collapsed"
+            "Team B", [None] + teams,
+            index=([None] + teams).index(slot["b"]) if slot["b"] in teams else 0,
+            format_func=lambda x: "Search..." if x is None else x,
+            key=key_b, label_visibility="collapsed"
         )
     with cx:
         if st.button("✕", key=f"slot_{idx}_clear", help="Clear this matchup"):
