@@ -135,7 +135,7 @@ def win_prob_card(result):
         </div>
         <div style="background:#1e2d45;border-radius:4px;height:8px;overflow:hidden;display:flex;">
             <div style="width:{pa*100:.1f}%;background:{ca};border-radius:4px 0 0 4px;"></div>
-            <div style="flex:1;background:#334155;border-radius:0 4px 4px 0;"></div>
+            <div style="flex:1;background:{cb};border-radius:0 4px 4px 0;"></div>
         </div>
         <div style="font-family:'DM Mono',monospace;font-size:0.6rem;color:#475569;margin-top:4px;text-align:center;">
             Favored: <span style="color:#f97316;">{favored}</span>
