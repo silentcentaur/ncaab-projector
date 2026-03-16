@@ -12,40 +12,30 @@ MAX_SLOTS = 4
 def init_state():
     if "cmp_slots" not in st.session_state:
         st.session_state.cmp_slots = [{"a": None, "b": None} for _ in range(MAX_SLOTS)]
-    if "cmp_active" not in st.session_state:
-        st.session_state.cmp_active = 1  # number of active slots
+    # Always ensure 4 slots exist
+    while len(st.session_state.cmp_slots) < MAX_SLOTS:
+        st.session_state.cmp_slots.append({"a": None, "b": None})
 
 def get_weights():
     return {k: st.session_state.get(f"w_{k}", v) for k, v in DEFAULTS.items()}
 
 def seed_buttons(teams, df, seed_map, bracket_seeds):
-    """Render seed buttons 1-16 to auto-fill next empty slot."""
-    st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Quick add by seed matchup (1 vs 16, 2 vs 15...)</div>', unsafe_allow_html=True)
+    """Render seed pair buttons — clicking fills all 4 slots with that matchup across all regions."""
+    st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Load all 4 regional matchups by seed pairing</div>', unsafe_allow_html=True)
     SEED_PAIRS = [(1,16),(8,9),(5,12),(4,13),(6,11),(3,14),(7,10),(2,15)]
+    REGIONS = ["East","West","South","Midwest"]
     cols = st.columns(8)
     for i, (s1, s2) in enumerate(SEED_PAIRS):
         with cols[i]:
-            label = f"{s1}v{s2}"
-            if st.button(label, key=f"seed_btn_{s1}_{s2}", use_container_width=True):
-                # Find teams for this seed pair across all regions (use first found)
-                team_a, team_b = None, None
-                for region, seeds in bracket_seeds.items():
-                    if s1 in seeds and s2 in seeds:
-                        team_a = seeds[s1]
-                        team_b = seeds[s2]
-                        break
-                if team_a and team_b:
-                    # Fill next available slot
-                    active = st.session_state.cmp_active
-                    for idx in range(active):
-                        if not st.session_state.cmp_slots[idx]["a"] and not st.session_state.cmp_slots[idx]["b"]:
-                            st.session_state.cmp_slots[idx] = {"a": team_a, "b": team_b}
-                            st.rerun()
-                    # All filled — add new slot if under max
-                    if active < MAX_SLOTS:
-                        st.session_state.cmp_active += 1
-                        st.session_state.cmp_slots[active] = {"a": team_a, "b": team_b}
-                        st.rerun()
+            if st.button(f"{s1}v{s2}", key=f"seed_btn_{s1}_{s2}", use_container_width=True):
+                new_slots = []
+                for region in REGIONS:
+                    seeds = bracket_seeds.get(region, {})
+                    ta = seeds.get(s1)
+                    tb = seeds.get(s2)
+                    new_slots.append({"a": ta, "b": tb})
+                st.session_state.cmp_slots = new_slots
+                st.rerun()
 
 def render_slot(idx, teams, df, game_df, weights, seed_map):
     slot = st.session_state.cmp_slots[idx]
@@ -178,22 +168,11 @@ def show():
     seed_buttons(teams, df, seed_map, bracket_seeds)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Slot controls ─────────────────────────────────────────────────────────
-    ctrl_l, ctrl_r = st.columns([6, 1])
-    with ctrl_l:
-        active = st.session_state.cmp_active
-        st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;text-transform:uppercase;">{active} of {MAX_SLOTS} matchups</div>', unsafe_allow_html=True)
-    with ctrl_r:
-        if st.session_state.cmp_active < MAX_SLOTS:
-            if st.button("＋ Add", key="add_slot"):
-                st.session_state.cmp_active += 1
-                st.rerun()
-
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Render slots & collect results ───────────────────────────────────────
     results = []
-    for idx in range(st.session_state.cmp_active):
+    for idx in range(MAX_SLOTS):
         with st.container():
             st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;text-transform:uppercase;margin-bottom:4px;">Matchup {idx+1}</div>', unsafe_allow_html=True)
             result = render_slot(idx, teams, df, game_df, weights, seed_map)
