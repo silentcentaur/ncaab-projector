@@ -128,7 +128,7 @@ with st.sidebar:
 
 if   "Overview"  in page: from pages import overview;         overview.show()
 elif "Explorer"  in page: from pages import explorer;         explorer.show()
-elif "Matchup"   in page: from pages import matchup;          matchup.show()
+elif "Simulator" in page: from pages import matchup;          matchup.show()
 elif "Compare"   in page: from pages import matchup_compare;  matchup_compare.show()
 elif "Game Log"  in page: from pages import gamelog;          gamelog.show()
 elif "Bracket"   in page: from pages import bracket;          bracket.show()
