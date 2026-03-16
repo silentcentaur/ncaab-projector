@@ -105,18 +105,33 @@ def stat_bar(label, va, vb, higher_is_better=True, fmt=".2f"):
 DEFAULTS = {"oe":1.0,"de":1.0,"efg":0.8,"tov":0.6,"orb":0.5,"sos":0.4,"form":0.6,"margin":0.4}
 
 # ── Upset signal scoring ───────────────────────────────────────────────────────
+# All signals measure deviation from seed expectation, not absolute quality.
+# Positive score = team_a is better than their seed implies (undervalued).
+# Negative score = team_b is better than their seed implies (undervalued).
+# When seeds are unavailable, signals fall back to T-Rank-relative comparisons.
 
-# Approximate expected T-Rank for each seed (1=~4, 16=~72)
-SEED_TO_EXPECTED_RANK = {1:4,2:11,3:18,4:25,5:33,6:41,7:49,8:57,
-                          9:63,10:69,11:74,12:80,13:88,14:96,15:108,16:120}
+# Expected T-Rank range per seed based on 2005-2024 tournament data
+SEED_TO_EXPECTED_RANK  = {1:4, 2:11, 3:18, 4:25, 5:33, 6:41, 7:49, 8:57,
+                           9:63,10:69,11:74,12:80,13:88,14:96,15:108,16:120}
+# Expected AdjDE (defensive efficiency) per seed — lower = better defense
+SEED_TO_EXPECTED_DE    = {1:88, 2:90, 3:92, 4:94, 5:96, 6:97, 7:98, 8:99,
+                           9:100,10:101,11:102,12:103,13:104,14:106,15:108,16:110}
+# Expected AdjEM (efficiency margin) per seed
+SEED_TO_EXPECTED_EM    = {1:28, 2:22, 3:18, 4:14, 5:11, 6:9,  7:7,  8:5,
+                           9:4,  10:3, 11:2, 12:1, 13:0, 14:-2,15:-4,16:-6}
+# Expected SOS (strength of schedule) per seed — higher = tougher schedule
+SEED_TO_EXPECTED_SOS   = {1:.24,2:.22,3:.20,4:.18,5:.16,6:.14,7:.12,8:.10,
+                           9:.09,10:.08,11:.07,12:.06,13:.05,14:.04,15:.03,16:.02}
+# National average tempo baseline
+AVG_TEMPO = 68.0
 
 SIGNAL_META = {
-    "rank_gap":    {"label": "Seed vs T-Rank gap",          "weight": 0.30},
-    "def_edge":    {"label": "Defensive efficiency edge",    "weight": 0.20},
-    "em_mismatch": {"label": "Efficiency margin mismatch",   "weight": 0.20},
-    "tempo":       {"label": "Tempo mismatch",               "weight": 0.15},
-    "form":        {"label": "Recent form edge",             "weight": 0.10},
-    "sos":         {"label": "Strength of schedule edge",    "weight": 0.05},
+    "rank_gap":    {"label": "Seed vs T-Rank gap",                "weight": 0.30},
+    "def_edge":    {"label": "Defense vs seed expectation",       "weight": 0.20},
+    "em_mismatch": {"label": "Efficiency margin vs seed",         "weight": 0.20},
+    "tempo":       {"label": "Tempo mismatch (underdog benefit)", "weight": 0.15},
+    "form":        {"label": "Recent form vs seed expectation",   "weight": 0.10},
+    "sos":         {"label": "Schedule strength vs seed",         "weight": 0.05},
 }
 
 def _safe(row, col, default=None):
@@ -125,91 +140,151 @@ def _safe(row, col, default=None):
     try: return float(v)
     except (TypeError, ValueError): return default
 
+def _seed_relative(value, expected_for_seed, scale, invert=False):
+    """
+    Score how much `value` beats or misses the expectation for this seed.
+    invert=True when lower value is better (e.g. AdjDE, T-Rank).
+    Returns a float roughly in [-3, 3].
+    """
+    if value is None or expected_for_seed is None: return 0.0
+    diff = expected_for_seed - value if invert else value - expected_for_seed
+    return diff / scale
+
 def compute_upset_signals(ra, rb, games_a, games_b):
     """
     Compute per-signal scores for team_a vs team_b.
-    Positive composite = team_a stronger than matchup suggests.
-    Negative composite = team_b stronger than matchup suggests.
+    Every signal measures how much each team over/underperforms their seed expectation.
+    The net difference (team_a score - team_b score) drives the adjustment.
+
+    Falls back gracefully when seeds are not populated (pre-tournament use).
 
     Returns:
-        adj_pa  (float): adjusted win prob for team_a
-        adj_pb  (float): adjusted win prob for team_b
-        signals (list):  list of dicts with label, raw_diff, score, weight, favors
+        adjustment (float): probability nudge for team_a, capped at ±0.12
+        signals    (list):  per-signal breakdown dicts for UI rendering
     """
-    seed_a = _safe(ra, "seed"); seed_b = _safe(rb, "seed")
+    seed_a  = _safe(ra, "seed");  seed_b  = _safe(rb, "seed")
     trank_a = _safe(ra, "barthag_rk") or _safe(ra, "trank") or _safe(ra, "rk")
     trank_b = _safe(rb, "barthag_rk") or _safe(rb, "trank") or _safe(rb, "rk")
     adj_oe_a = _safe(ra, "adj_oe", 100); adj_oe_b = _safe(rb, "adj_oe", 100)
     adj_de_a = _safe(ra, "adj_de", 100); adj_de_b = _safe(rb, "adj_de", 100)
-    tempo_a  = _safe(ra, "adj_tempo", 68); tempo_b = _safe(rb, "adj_tempo", 68)
-    sos_a    = _safe(ra, "sos_oe", 0);   sos_b   = _safe(rb, "sos_oe", 0)
+    tempo_a  = _safe(ra, "adj_tempo", AVG_TEMPO)
+    tempo_b  = _safe(rb, "adj_tempo", AVG_TEMPO)
+    sos_a    = _safe(ra, "sos_oe");      sos_b    = _safe(rb, "sos_oe")
     form_a   = recent_form_score(games_a)
     form_b   = recent_form_score(games_b)
+    em_a     = adj_oe_a - adj_de_a
+    em_b     = adj_oe_b - adj_de_b
+
+    has_seeds = seed_a is not None and seed_b is not None
+    sa, sb    = (int(seed_a) if has_seeds else None), (int(seed_b) if has_seeds else None)
 
     raw = {}
 
-    # 1. Seed vs rank gap — positive = team_a more undervalued
-    if seed_a and trank_a and seed_b and trank_b:
-        exp_a = SEED_TO_EXPECTED_RANK.get(int(seed_a), seed_a * 7)
-        exp_b = SEED_TO_EXPECTED_RANK.get(int(seed_b), seed_b * 7)
-        gap_a = exp_a - trank_a   # positive = better than seed implies
-        gap_b = exp_b - trank_b
-        raw["rank_gap"] = (gap_a - gap_b) / 15.0
+    # 1. Seed vs T-Rank gap
+    # How much better/worse is each team's actual rank vs what their seed implies?
+    if has_seeds and trank_a and trank_b:
+        exp_rank_a = SEED_TO_EXPECTED_RANK.get(sa, sa * 7)
+        exp_rank_b = SEED_TO_EXPECTED_RANK.get(sb, sb * 7)
+        score_a = _seed_relative(trank_a, exp_rank_a, scale=12, invert=True)
+        score_b = _seed_relative(trank_b, exp_rank_b, scale=12, invert=True)
+        raw["rank_gap"] = score_a - score_b
+    elif trank_a and trank_b:
+        # No seeds: use raw rank difference, normalized to national field (~360 teams)
+        raw["rank_gap"] = (trank_b - trank_a) / 60.0
     else:
         raw["rank_gap"] = 0.0
 
-    # 2. Defensive efficiency edge — lower AdjDE is better
-    # Normalize: top-10 defense ~88, avg ~100. Scale so 10pt edge ≈ 2.0
-    raw["def_edge"] = (adj_de_b - adj_de_a) / 5.0
-
-    # 3. Efficiency margin mismatch vs seed gap
-    em_a = adj_oe_a - adj_de_a
-    em_b = adj_oe_b - adj_de_b
-    em_diff_actual = em_a - em_b
-    if seed_a and seed_b:
-        expected_em_diff = (seed_b - seed_a) * 2.5  # higher seed should have bigger EM
-        raw["em_mismatch"] = (em_diff_actual - expected_em_diff) / 5.0
+    # 2. Defensive efficiency vs seed expectation
+    # A 12-seed with top-40 defense is a huge mismatch signal
+    if has_seeds:
+        exp_de_a = SEED_TO_EXPECTED_DE.get(sa, 100)
+        exp_de_b = SEED_TO_EXPECTED_DE.get(sb, 100)
+        score_a = _seed_relative(adj_de_a, exp_de_a, scale=4, invert=True)
+        score_b = _seed_relative(adj_de_b, exp_de_b, scale=4, invert=True)
+        raw["def_edge"] = score_a - score_b
     else:
-        raw["em_mismatch"] = em_diff_actual / 8.0
+        # No seeds: pure defensive edge, normalized nationally (~4pt avg gap between good/avg)
+        raw["def_edge"] = (adj_de_b - adj_de_a) / 4.0
 
-    # 4. Tempo mismatch — slower team benefits from low-possession game
-    # If team_a is slower, they get a small boost (more variance = helps underdog)
-    tempo_diff = tempo_b - tempo_a   # positive = team_a is slower
-    if seed_a and seed_b and seed_a > seed_b:
-        # team_a is the underdog — slower pace benefits them
-        raw["tempo"] = tempo_diff / 8.0
+    # 3. Efficiency margin vs seed expectation
+    # A team closer in EM than seed gap suggests = undervalued
+    if has_seeds:
+        exp_em_a = SEED_TO_EXPECTED_EM.get(sa, 0)
+        exp_em_b = SEED_TO_EXPECTED_EM.get(sb, 0)
+        score_a = _seed_relative(em_a, exp_em_a, scale=5)
+        score_b = _seed_relative(em_b, exp_em_b, scale=5)
+        raw["em_mismatch"] = score_a - score_b
     else:
-        raw["tempo"] = -tempo_diff / 8.0
+        raw["em_mismatch"] = (em_a - em_b) / 8.0
 
-    # 5. Recent form
-    raw["form"] = (form_a - form_b) / 1.0
+    # 4. Tempo mismatch — benefits the underdog when they are slower
+    # Fewer possessions = more variance = better for the weaker team
+    if has_seeds:
+        underdog_seed  = max(sa, sb)
+        underdog_tempo = tempo_a if sa == underdog_seed else tempo_b
+        favorite_tempo = tempo_b if sa == underdog_seed else tempo_a
+        tempo_diff     = favorite_tempo - underdog_tempo  # positive = underdog is slower
+        # Score from team_a's perspective
+        sign = 1 if sa == underdog_seed else -1
+        raw["tempo"] = sign * (tempo_diff / 6.0)
+    else:
+        # No seeds: use T-Rank as proxy for who is the underdog
+        if trank_a and trank_b:
+            underdog_is_a  = trank_a > trank_b  # higher rank number = weaker team
+            tempo_diff     = tempo_b - tempo_a if underdog_is_a else tempo_a - tempo_b
+            sign           = 1 if underdog_is_a else -1
+            raw["tempo"]   = sign * (tempo_diff / 6.0)
+        else:
+            raw["tempo"] = 0.0
 
-    # 6. SOS edge
-    raw["sos"] = (sos_a - sos_b) / 0.05 if (sos_a and sos_b) else 0.0
+    # 5. Recent form vs seed expectation
+    # A hot lower seed matters more than a hot 1-seed (expected to win anyway).
+    # Use a mild seed multiplier capped at 1.5x to avoid over-inflating low seeds.
+    if has_seeds:
+        seed_weight_a = min(1.0 + (sa - 1) / 30.0, 1.5)   # seed 1 → 1.0, seed 16 → 1.5
+        seed_weight_b = min(1.0 + (sb - 1) / 30.0, 1.5)
+        raw["form"] = (form_a * seed_weight_a) - (form_b * seed_weight_b)
+    else:
+        raw["form"] = (form_a - form_b)
 
-    # Weighted composite score (positive = team_a advantage)
+    # 6. Strength of schedule vs seed expectation
+    # sos_oe values typically range 0.02–0.28; meaningful difference is ~0.06–0.10.
+    # Scale of 0.08 means a 0.08 SoS gap above expectation = score of 1.0.
+    if has_seeds and sos_a is not None and sos_b is not None:
+        exp_sos_a = SEED_TO_EXPECTED_SOS.get(sa, 0.10)
+        exp_sos_b = SEED_TO_EXPECTED_SOS.get(sb, 0.10)
+        score_a = _seed_relative(sos_a, exp_sos_a, scale=0.08)
+        score_b = _seed_relative(sos_b, exp_sos_b, scale=0.08)
+        raw["sos"] = score_a - score_b
+    elif sos_a is not None and sos_b is not None:
+        raw["sos"] = (sos_a - sos_b) / 0.08
+    else:
+        raw["sos"] = 0.0
+
+    # Weighted composite — each signal already in team_a-relative terms
     composite = sum(
-        SIGNAL_META[k]["weight"] * np.clip(raw[k], -3, 3)
+        SIGNAL_META[k]["weight"] * float(np.clip(raw[k], -3, 3))
         for k in SIGNAL_META
     )
 
-    # Map composite to probability adjustment — max ±12pp
+    # Max ±12pp adjustment
     adjustment = float(np.clip(composite * 0.06, -0.12, 0.12))
 
-    # Build signal breakdown for UI
+    # Build signal list for UI
     signals = []
     for k, meta in SIGNAL_META.items():
-        val = raw[k]
+        val     = raw[k]
         clamped = float(np.clip(val, -3, 3))
         contrib = meta["weight"] * clamped
         signals.append({
-            "key":     k,
-            "label":   meta["label"],
-            "weight":  meta["weight"],
-            "raw":     val,
-            "score":   clamped,
+            "key":    k,
+            "label":  meta["label"],
+            "weight": meta["weight"],
+            "raw":    val,
+            "score":  clamped,
             "contrib": contrib,
-            "favors":  "a" if contrib > 0.01 else ("b" if contrib < -0.01 else "neutral"),
+            "favors": "a" if contrib > 0.01 else ("b" if contrib < -0.01 else "neutral"),
+            "no_seed": not has_seeds,
         })
 
     return adjustment, signals
@@ -222,10 +297,12 @@ def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, ad
     adj_pp    = abs(adjustment) * 100
 
     with st.expander(f"🔬  Upset Signal Analysis  ·  {direction} {adj_pp:.1f}pp adjustment ({favored})", expanded=False):
+        no_seed = any(s.get("no_seed") for s in signals)
+        seed_note = " · <span style='color:#f97316;'>no seeds set — using T-Rank relative mode</span>" if no_seed else ""
         st.markdown(
             f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;'
             f'text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem;">'
-            f'Base probability adjusted from {pa_base*100:.1f}% → {pa_adj*100:.1f}% for {team_a}</div>',
+            f'Base probability adjusted from {pa_base*100:.1f}% → {pa_adj*100:.1f}% for {team_a}{seed_note}</div>',
             unsafe_allow_html=True
         )
 
