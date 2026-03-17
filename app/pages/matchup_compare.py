@@ -75,8 +75,9 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     with cx:
         if st.button("✕", key=f"slot_{idx}_clear", help="Clear this matchup"):
             st.session_state.cmp_slots[idx] = {"a": None, "b": None}
-            st.session_state[key_a] = None
-            st.session_state[key_b] = None
+            for k in [key_a, key_b]:
+                if k in st.session_state:
+                    del st.session_state[k]
             st.rerun()
 
     # Sync back
