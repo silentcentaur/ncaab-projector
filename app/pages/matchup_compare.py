@@ -217,6 +217,9 @@ def show():
     st.write("seed_map sample:", dict(list(seed_map.items())[:5]))
     st.write("Connecticut in teams:", "Connecticut" in teams)
     st.write("Connecticut in seed_map:", "Connecticut" in seed_map)
+    st.write("North Carolina in teams:", "North Carolina" in teams)
+    st.write("North Carolina in seed_map:", "North Carolina" in seed_map)
+    st.write([t for t in teams if "carolina" in t.lower()])
     st.write("slot 0 state:", st.session_state.cmp_slots[0] if "cmp_slots" in st.session_state else "not set")
 
     weights = get_weights()
