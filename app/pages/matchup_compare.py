@@ -198,15 +198,19 @@ def show():
         game_df.columns = [c.lower() for c in game_df.columns]
         nm.build(df["team"].dropna().tolist(), game_df["team"].dropna().unique().tolist())
 
-    # Build seed map — force fresh import to avoid stale module cache
+    # Build seed map by reading bracket_seeds directly — avoids stale module cache
     seed_map = {}
     bracket_seeds_dict = {}
     try:
-        import importlib
-        import bracket_seeds as _bs_fresh
-        importlib.reload(_bs_fresh)
-        bracket_seeds_dict = _bs_fresh.BRACKET_2026
-        for region, seeds in _bs_fresh.BRACKET_2026.items():
+        import importlib, importlib.util
+        _spec = importlib.util.spec_from_file_location(
+            "bracket_seeds",
+            os.path.join(os.path.dirname(__file__), "..", "bracket_seeds.py")
+        )
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        bracket_seeds_dict = _mod.BRACKET_2026
+        for region, seeds in _mod.BRACKET_2026.items():
             for seed, team in seeds.items():
                 if team:
                     seed_map[team] = seed
