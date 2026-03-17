@@ -244,6 +244,9 @@ def upset_risk_score(r):
 
     signal_summary = [(name, round(val * 100)) for name, val, _ in signals]
     return pct, label, color, signal_summary
+
+
+def win_prob_card(result):
     pa, pb = result["pa"], result["pb"]
     ca = "#f97316" if pa >= pb else "#64748b"
     cb = "#f97316" if pb > pa else "#64748b"
