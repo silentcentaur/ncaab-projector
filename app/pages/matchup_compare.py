@@ -196,22 +196,25 @@ def show():
         game_df.columns = [c.lower() for c in game_df.columns]
         nm.build(df["team"].dropna().tolist(), game_df["team"].dropna().unique().tolist())
 
-    # Build seed map
+    # Build seed map from already-imported bracket_seeds module
     seed_map = {}
-    bracket_seeds = {}
+    bracket_seeds_dict = {}
     try:
-        from bracket_seeds import BRACKET_2026
-        bracket_seeds = BRACKET_2026
-        for region, seeds in BRACKET_2026.items():
+        bracket_seeds_dict = bs.BRACKET_2026
+        for region, seeds in bs.BRACKET_2026.items():
             for seed, team in seeds.items():
-                if team: seed_map[team] = seed
-    except Exception:
-        pass
+                if team:
+                    seed_map[team] = seed
+    except Exception as e:
+        st.warning(f"Could not load bracket seeds: {e}")
+
+    if not seed_map:
+        st.warning("Seed map is empty — check bracket_seeds.py is accessible.")
 
     weights = get_weights()
 
     # ── Seed quick-add buttons ────────────────────────────────────────────────
-    seed_buttons(teams, df, seed_map, bracket_seeds)
+    seed_buttons(teams, df, seed_map, bracket_seeds_dict)
     st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
