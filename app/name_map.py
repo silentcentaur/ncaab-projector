@@ -18,7 +18,7 @@ import pandas as pd
 # ── Manual overrides for tricky cases ────────────────────────────────────────
 # Format: BartTorvik name -> ESPN full name
 MANUAL = {
-    "UConn":              "Connecticut Huskies",
+    "UConn":              "UConn Huskies",
     "UCF":                "UCF Knights",
     "UAB":                "UAB Blazers",
     "UTEP":               "UTEP Miners",
