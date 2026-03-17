@@ -213,6 +213,12 @@ def show():
     if not seed_map:
         st.warning("Seed map is empty — check bracket_seeds.py is accessible.")
 
+    # TEMP DEBUG
+    st.write("seed_map sample:", dict(list(seed_map.items())[:5]))
+    st.write("Connecticut in teams:", "Connecticut" in teams)
+    st.write("Connecticut in seed_map:", "Connecticut" in seed_map)
+    st.write("slot 0 state:", st.session_state.cmp_slots[0] if "cmp_slots" in st.session_state else "not set")
+
     weights = get_weights()
 
     # ── Seed quick-add buttons ────────────────────────────────────────────────
