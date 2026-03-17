@@ -48,12 +48,19 @@ def seed_buttons(teams, df, seed_map, bracket_seeds):
 def render_slot(idx, teams, df, game_df, weights, seed_map):
     slot = st.session_state.cmp_slots[idx]
 
-    # Pre-populate session state ONLY if the slot was set externally (seed button)
-    # Don't overwrite if the user has manually selected a team
     key_a, key_b = f"slot_{idx}_a", f"slot_{idx}_b"
-    if slot["a"] and slot["a"] in teams and st.session_state.get(key_a) != slot["a"]:
+
+    # Only pre-populate from slot when the key doesn't exist yet (fresh load or after clear)
+    # This avoids overwriting user's manual selections on every rerender
+    if key_a not in st.session_state:
+        st.session_state[key_a] = slot["a"] if slot["a"] and slot["a"] in teams else None
+    if key_b not in st.session_state:
+        st.session_state[key_b] = slot["b"] if slot["b"] and slot["b"] in teams else None
+
+    # If a seed button just set the slot, force update the widget keys
+    if slot["a"] and st.session_state.get(key_a) != slot["a"] and slot["a"] in teams:
         st.session_state[key_a] = slot["a"]
-    if slot["b"] and slot["b"] in teams and st.session_state.get(key_b) != slot["b"]:
+    if slot["b"] and st.session_state.get(key_b) != slot["b"] and slot["b"] in teams:
         st.session_state[key_b] = slot["b"]
 
     # Team pickers
@@ -80,7 +87,9 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
                     del st.session_state[k]
             st.rerun()
 
-    # Sync back
+    # Sync slot from widget values (not the reverse)
+    team_a = st.session_state.get(key_a)
+    team_b = st.session_state.get(key_b)
     st.session_state.cmp_slots[idx] = {"a": team_a, "b": team_b}
 
     if not team_a or not team_b or team_a == team_b:
