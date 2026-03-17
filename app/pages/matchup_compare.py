@@ -48,16 +48,13 @@ def seed_buttons(teams, df, seed_map, bracket_seeds):
 def render_slot(idx, teams, df, game_df, weights, seed_map):
     slot = st.session_state.cmp_slots[idx]
 
-    # Pre-populate session state keys so selectbox reflects seeded values
+    # Pre-populate session state ONLY if the slot was set externally (seed button)
+    # Don't overwrite if the user has manually selected a team
     key_a, key_b = f"slot_{idx}_a", f"slot_{idx}_b"
-    if slot["a"] and slot["a"] in teams:
+    if slot["a"] and slot["a"] in teams and st.session_state.get(key_a) != slot["a"]:
         st.session_state[key_a] = slot["a"]
-    elif not slot["a"]:
-        st.session_state[key_a] = None
-    if slot["b"] and slot["b"] in teams:
+    if slot["b"] and slot["b"] in teams and st.session_state.get(key_b) != slot["b"]:
         st.session_state[key_b] = slot["b"]
-    elif not slot["b"]:
-        st.session_state[key_b] = None
 
     # Team pickers
     c1, cv, c2, cx = st.columns([5, 0.6, 5, 0.4])
@@ -78,6 +75,8 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     with cx:
         if st.button("✕", key=f"slot_{idx}_clear", help="Clear this matchup"):
             st.session_state.cmp_slots[idx] = {"a": None, "b": None}
+            st.session_state[key_a] = None
+            st.session_state[key_b] = None
             st.rerun()
 
     # Sync back
