@@ -198,12 +198,15 @@ def show():
         game_df.columns = [c.lower() for c in game_df.columns]
         nm.build(df["team"].dropna().tolist(), game_df["team"].dropna().unique().tolist())
 
-    # Build seed map from already-imported bracket_seeds module
+    # Build seed map — force fresh import to avoid stale module cache
     seed_map = {}
     bracket_seeds_dict = {}
     try:
-        bracket_seeds_dict = bs.BRACKET_2026
-        for region, seeds in bs.BRACKET_2026.items():
+        import importlib
+        import bracket_seeds as _bs_fresh
+        importlib.reload(_bs_fresh)
+        bracket_seeds_dict = _bs_fresh.BRACKET_2026
+        for region, seeds in _bs_fresh.BRACKET_2026.items():
             for seed, team in seeds.items():
                 if team:
                     seed_map[team] = seed
@@ -212,15 +215,6 @@ def show():
 
     if not seed_map:
         st.warning("Seed map is empty — check bracket_seeds.py is accessible.")
-
-    # TEMP DEBUG
-    st.write("seed_map sample:", dict(list(seed_map.items())[:5]))
-    st.write("Connecticut in teams:", "Connecticut" in teams)
-    st.write("Connecticut in seed_map:", "Connecticut" in seed_map)
-    st.write("North Carolina in teams:", "North Carolina" in teams)
-    st.write("North Carolina in seed_map:", "North Carolina" in seed_map)
-    st.write([t for t in teams if "carolina" in t.lower()])
-    st.write("slot 0 state:", st.session_state.cmp_slots[0] if "cmp_slots" in st.session_state else "not set")
 
     weights = get_weights()
 
