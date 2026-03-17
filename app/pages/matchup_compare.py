@@ -43,25 +43,28 @@ def seed_buttons(teams, df, seed_map, bracket_seeds):
                 for i, slot in enumerate(new_slots):
                     st.session_state[f"slot_{i}_a"] = slot["a"]
                     st.session_state[f"slot_{i}_b"] = slot["b"]
+                    st.session_state[f"slot_{i}_seeded"] = True
                 st.rerun()
 
 def render_slot(idx, teams, df, game_df, weights, seed_map):
     slot = st.session_state.cmp_slots[idx]
 
     key_a, key_b = f"slot_{idx}_a", f"slot_{idx}_b"
+    seed_flag = f"slot_{idx}_seeded"
 
-    # Only pre-populate from slot when the key doesn't exist yet (fresh load or after clear)
-    # This avoids overwriting user's manual selections on every rerender
+    # Only force-update widget keys when a seed button just populated this slot
+    if st.session_state.get(seed_flag):
+        if slot["a"] and slot["a"] in teams:
+            st.session_state[key_a] = slot["a"]
+        if slot["b"] and slot["b"] in teams:
+            st.session_state[key_b] = slot["b"]
+        st.session_state[seed_flag] = False  # clear flag after applying
+
+    # Initialize keys if they don't exist yet
     if key_a not in st.session_state:
         st.session_state[key_a] = slot["a"] if slot["a"] and slot["a"] in teams else None
     if key_b not in st.session_state:
         st.session_state[key_b] = slot["b"] if slot["b"] and slot["b"] in teams else None
-
-    # If a seed button just set the slot, force update the widget keys
-    if slot["a"] and st.session_state.get(key_a) != slot["a"] and slot["a"] in teams:
-        st.session_state[key_a] = slot["a"]
-    if slot["b"] and st.session_state.get(key_b) != slot["b"] and slot["b"] in teams:
-        st.session_state[key_b] = slot["b"]
 
     # Team pickers
     c1, cv, c2, cx = st.columns([5, 0.6, 5, 0.4])
@@ -147,7 +150,100 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
         "sos_a": g(ra,"sos_oe"), "sos_b": g(rb,"sos_oe"),
     }
 
-def win_prob_card(result):
+def upset_risk_score(r):
+    """
+    Score upset risk for the underdog using weighted continuous signals.
+    Each signal fires on a 0.0-1.0 scale based on how strongly the condition is met.
+    Returns (pct 0-100, label, color, signals list of (name, strength)).
+    """
+    pa, pb = r["pa"], r["pb"]
+    if pa >= pb:
+        fav_net  = r.get("net_a") or 0;  dog_net  = r.get("net_b") or 0
+        fav_efg  = r.get("efg_a");        dog_efg  = r.get("efg_b")
+        fav_tov  = r.get("tov_a");        dog_tov  = r.get("tov_b")
+        fav_orb  = r.get("orb_a");        dog_orb  = r.get("orb_b")
+        fav_tmp  = r.get("tempo_a") or 68;dog_tmp  = r.get("tempo_b") or 68
+        fav_sos  = r.get("sos_a");        dog_sos  = r.get("sos_b")
+        fav_de   = r.get("de_a");         dog_de   = r.get("de_b")
+        dog_name = r["team_b"]
+    else:
+        fav_net  = r.get("net_b") or 0;  dog_net  = r.get("net_a") or 0
+        fav_efg  = r.get("efg_b");        dog_efg  = r.get("efg_a")
+        fav_tov  = r.get("tov_b");        dog_tov  = r.get("tov_a")
+        fav_orb  = r.get("orb_b");        dog_orb  = r.get("orb_a")
+        fav_tmp  = r.get("tempo_b") or 68;dog_tmp  = r.get("tempo_a") or 68
+        fav_sos  = r.get("sos_b");        dog_sos  = r.get("sos_a")
+        fav_de   = r.get("de_b");         dog_de   = r.get("de_a")
+        dog_name = r["team_a"]
+
+    def clamp(v, lo=0.0, hi=1.0):
+        return max(lo, min(hi, v))
+
+    signals = []
+    net_gap = fav_net - dog_net
+
+    # ── Kill switch: massive gap = near zero risk ─────────────────────────────
+    if net_gap > 25:
+        return 0, "No upset", "#334155", [("Net gap >25", 0.0)]
+
+    # ── Tier 1 (weight 0.40 total) ────────────────────────────────────────────
+    # Net efficiency gap — smaller gap = higher risk, scale 0-15pt range
+    net_sig = clamp(1.0 - (net_gap / 15.0))
+    signals.append(("Net eff gap", net_sig, 0.25))
+
+    # Underdog net efficiency floor — not a pushover
+    dog_net_sig = clamp((dog_net + 5) / 20.0)  # -5 → 0.0, +15 → 1.0
+    signals.append(("Underdog strength", dog_net_sig, 0.15))
+
+    # ── Tier 2 (weight 0.45 total) ────────────────────────────────────────────
+    # eFG% — how much does underdog close or exceed the gap
+    if fav_efg and dog_efg:
+        efg_diff = dog_efg - fav_efg  # positive = underdog better
+        efg_sig = clamp(0.5 + efg_diff / 0.06)  # ±0.03 range maps to 0-1
+        signals.append(("eFG% edge", efg_sig, 0.15))
+
+    # TOV% — lower is better; underdog advantage
+    if fav_tov and dog_tov:
+        tov_diff = fav_tov - dog_tov  # positive = underdog better
+        tov_sig = clamp(0.5 + tov_diff / 0.04)
+        signals.append(("TOV% edge", tov_sig, 0.12))
+
+    # Tempo — slower underdog compresses game, more variance
+    tempo_diff = fav_tmp - dog_tmp  # positive = underdog slower
+    tempo_sig = clamp(0.5 + tempo_diff / 10.0)
+    signals.append(("Tempo mismatch", tempo_sig, 0.10))
+
+    # ORB% — underdog offensive rebounding
+    if dog_orb:
+        orb_sig = clamp((dog_orb - 0.25) / 0.15)  # 0.25→0.0, 0.40→1.0
+        signals.append(("Underdog ORB%", orb_sig, 0.08))
+
+    # ── Tier 3 (weight 0.15 total) ────────────────────────────────────────────
+    # SOS — underdog played tougher schedule than seed implies
+    if fav_sos and dog_sos:
+        sos_diff = dog_sos - fav_sos  # positive = underdog tougher schedule
+        sos_sig = clamp(0.5 + sos_diff / 0.4)
+        signals.append(("SOS edge", sos_sig, 0.08))
+
+    # Favorite's defense quality — weaker favorite D = easier path for underdog
+    if fav_de:
+        de_sig = clamp((fav_de - 92) / 15.0)  # 92→0.0 (elite D), 107→1.0 (weak D)
+        signals.append(("Favorite def.", de_sig, 0.07))
+
+    # ── Weighted sum → 0-100% ─────────────────────────────────────────────────
+    total_weight = sum(w for _, _, w in signals)
+    raw_score = sum(v * w for _, v, w in signals) / total_weight if total_weight else 0
+    pct = round(raw_score * 100)
+
+    if pct < 20:  label, color = "Very low",  "#475569"
+    elif pct < 35: label, color = "Low",       "#64748b"
+    elif pct < 50: label, color = "Possible",  "#854F0B"
+    elif pct < 62: label, color = "Moderate",  "#f97316"
+    elif pct < 75: label, color = "High",      "#ef4444"
+    else:          label, color = "Danger",    "#a855f7"
+
+    signal_summary = [(name, round(val * 100)) for name, val, _ in signals]
+    return pct, label, color, signal_summary
     pa, pb = result["pa"], result["pb"]
     ca = "#f97316" if pa >= pb else "#64748b"
     cb = "#f97316" if pb > pa else "#64748b"
@@ -310,6 +406,26 @@ def show():
             row_html += f'<td style="text-align:center;padding:8px 12px;color:{cb};">{fmt_val(vb, fmt)}</td>'
         row_html += '</tr>'
         header_html += row_html
+
+    # Upset risk row
+    upset_row = '<tr style="border-top:2px solid #1e2d45;border-bottom:1px solid #0f172a;background:#0d1526;">'
+    upset_row += '<td style="padding:8px 12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">Upset Risk</td>'
+    for r in results:
+        pct, label, color, signals = upset_risk_score(r)
+        pa, pb = r["pa"], r["pb"]
+        dog_name = r["team_b"] if pa >= pb else r["team_a"]
+        top3 = " · ".join(f"{n}" for n, _ in signals[:3])
+        badge = f'<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:{color}22;border:1px solid {color}66;color:{color};font-size:0.65rem;letter-spacing:0.05em;">{label.upper()}</span>'
+        bar = f'<div style="background:#1e2d45;border-radius:3px;height:5px;margin:4px 0;overflow:hidden;"><div style="width:{pct}%;background:{color};height:100%;"></div></div>'
+        upset_row += f'''<td colspan="2" style="text-align:center;padding:8px 12px;border-left:1px solid #1e2d45;">
+            {badge}
+            <div style="font-family:\'DM Mono\',monospace;font-size:0.7rem;font-weight:500;color:{color};margin-top:3px;">{pct}%</div>
+            {bar}
+            <div style="font-size:0.58rem;color:#334155;margin-top:2px;">for {dog_name}</div>
+            <div style="font-size:0.58rem;color:#475569;margin-top:2px;">{top3}</div>
+        </td>'''
+    upset_row += '</tr>'
+    header_html += upset_row
 
     header_html += '</tbody></table></div>'
     st.markdown(header_html, unsafe_allow_html=True)
