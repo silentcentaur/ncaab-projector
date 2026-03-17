@@ -210,6 +210,11 @@ def show():
 
     if not seed_map:
         st.warning("Seed map is empty — check bracket_seeds.py is accessible.")
+	
+	# TEMP DEBUG — remove after fixing
+	st.write("Connecticut in teams:", "Connecticut" in teams)
+    	st.write("Connecticut in seed_map:", "Connecticut" in seed_map)
+    	st.write([t for t in teams if "onnecticut" in t])
 
     weights = get_weights()
 
