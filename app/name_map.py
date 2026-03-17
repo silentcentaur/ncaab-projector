@@ -35,6 +35,7 @@ MANUAL = {
     "UIC":                "UIC Flames",
     "UMass":              "Massachusetts Minutemen",
     "UNC":                "North Carolina Tar Heels",
+    "North Carolina":     "North Carolina Tar Heels",
     "NC State":           "NC State Wolfpack",
     "Miami FL":           "Miami Hurricanes",
     "Miami OH":           "Miami (OH) RedHawks",
@@ -403,13 +404,13 @@ def get_team_games(game_df: pd.DataFrame, team_df: pd.DataFrame, bart_name: str)
     build(bart_names, espn_names)
 
     espn_name = to_espn(bart_name)
-    
-    # If direct match fails, try case-insensitive first-word match as fallback
+
+    # If direct match fails, try cleaned fuzzy match only — no first-word guessing
+    # (first-word matching causes "North Carolina" -> "Northeastern" type mismatches)
     if espn_name == bart_name:
-        bart_first = bart_name.lower().split()[0]
-        for en in espn_names:
-            if en.lower().startswith(bart_first):
-                espn_name = en
-                break
+        bc = _clean(bart_name)
+        espn_clean_map = {_clean(en): en for en in espn_names}
+        if bc in espn_clean_map:
+            espn_name = espn_clean_map[bc]
 
     return gdf[gdf["team"] == espn_name].copy()

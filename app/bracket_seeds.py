@@ -56,7 +56,7 @@ BRACKET_2026 = {
         3:  "Illinois",
         4:  "Nebraska",
         5:  "Vanderbilt",
-        6:  "North Carolina",
+        6:  "North Carolina Tar Heels",
         7:  "Saint Mary's",
         8:  "Clemson",
         9:  "Iowa",
