@@ -413,52 +413,41 @@ def _aggregate_four_factors_to_team_stats(sb: Client):
     ts_resp = sb.table("team_stats").select("team").eq("season", SEASON).execute()
     bart_names = [r["team"] for r in ts_resp.data]
 
-    # Build ESPN->BartTorvik lookup using name_map if available
+    # Build ESPN->BartTorvik lookup using name_map
     try:
         import sys, os
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
         import name_map as nm
         espn_names = df["team"].unique().tolist()
         nm.build(bart_names, espn_names)
+
         def find_bart(espn_name):
-            # to_espn gives us the canonical ESPN name, we need the reverse
-            # Try direct clean match
-            clean_espn = str(espn_name).lower().strip()
+            # Primary: reverse lookup via to_bart (handles all MANUAL entries)
+            bart = nm.to_bart(str(espn_name))
+            if bart != espn_name and bart in bart_names:
+                return bart
+            # Secondary: check if any bart name maps TO this espn name
+            espn_lower = str(espn_name).lower()
             for b in bart_names:
-                if nm.to_espn(b).lower() == clean_espn:
+                if nm.to_espn(b).lower() == espn_lower:
                     return b
             return None
-    except Exception:
-        find_bart = None
-
-    def clean(n):
-        return str(n).lower().split()[0] if n else ""
-
-    bart_clean = {}
-    for b in bart_names:
-        fw = clean(b)
-        if fw not in bart_clean:
-            bart_clean[fw] = b  # first-word fallback (may collide for Saint/* teams)
+    except Exception as e:
+        log.warning(f"  name_map import failed: {e}, falling back to direct match")
+        def find_bart(espn_name):
+            return None
 
     updated = 0
+    skipped = 0
     for _, row in avgs.iterrows():
         espn_name = row["team"]
-        # Try name_map reverse lookup first
-        bart_name = None
-        if find_bart:
-            bart_name = find_bart(espn_name)
-        # Fallback: strip mascot suffix and match
+        bart_name = find_bart(espn_name)
+
         if not bart_name:
-            stripped = str(espn_name).lower()
-            for b in bart_names:
-                if stripped.startswith(str(b).lower()) or str(b).lower() in stripped:
-                    bart_name = b
-                    break
-        # Last resort: first-word match
-        if not bart_name:
-            bart_name = bart_clean.get(clean(espn_name))
-        if not bart_name:
+            skipped += 1
+            log.debug(f"  No bart match for ESPN name: {espn_name}")
             continue
+
         update = {c: round(float(row[c]), 4) for c in ff_cols
                   if c in row and not pd.isna(row.get(c))}
         if update:
@@ -466,7 +455,7 @@ def _aggregate_four_factors_to_team_stats(sb: Client):
               .eq("season", SEASON).eq("team", bart_name).execute()
             updated += 1
 
-    log.info(f"  ✓ Updated four factors for {updated} teams in team_stats")
+    log.info(f"  ✓ Updated four factors for {updated} teams in team_stats ({skipped} ESPN names unmatched)")
     log_refresh(sb, "four_factors", updated, "success")
 
 
