@@ -52,15 +52,18 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     key_a, key_b = f"slot_{idx}_a", f"slot_{idx}_b"
     if slot["a"] and slot["a"] in teams:
         st.session_state[key_a] = slot["a"]
+    elif not slot["a"]:
+        st.session_state[key_a] = None
     if slot["b"] and slot["b"] in teams:
         st.session_state[key_b] = slot["b"]
+    elif not slot["b"]:
+        st.session_state[key_b] = None
 
     # Team pickers
     c1, cv, c2, cx = st.columns([5, 0.6, 5, 0.4])
     with c1:
         team_a = st.selectbox(
             "Team A", [None] + teams,
-            index=([None] + teams).index(slot["a"]) if slot["a"] in teams else 0,
             format_func=lambda x: "Search..." if x is None else x,
             key=key_a, label_visibility="collapsed"
         )
@@ -69,7 +72,6 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     with c2:
         team_b = st.selectbox(
             "Team B", [None] + teams,
-            index=([None] + teams).index(slot["b"]) if slot["b"] in teams else 0,
             format_func=lambda x: "Search..." if x is None else x,
             key=key_b, label_visibility="collapsed"
         )
