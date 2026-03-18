@@ -86,23 +86,29 @@ def fetch_and_store_team_stats(sb: Client, season: int):
     df = pd.read_csv(StringIO(resp.text), header=0)
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Older Torvik CSVs (pre-2022) have the last column header as "fun rk, adjt"
-    # which pandas splits into two columns due to the comma delimiter.
-    # The actual adjt value lands in a trailing unnamed/misnamed column.
-    # Detect and fix: find the column whose name contains "adjt" or is unnamed
-    # and rename it to "adjt" so the tempo rename below works correctly.
+    # Older Torvik CSVs (pre-2022) have an extra leading 'rank' column that
+    # shifts everything: 'rank'=team name, 'team'=conf, 'conf'=record, etc.
+    # Detect by checking if 'team' column values look like conference names.
+    if "rank" in df.columns and "team" in df.columns:
+        sample = df["team"].dropna().head(10).tolist()
+        conf_like = sum(1 for v in sample if isinstance(v, str) and len(str(v)) <= 5)
+        if conf_like >= 7:
+            log.info(f"[{season}]   Detected shifted columns — correcting alignment")
+            # Drop the 'rank' header and shift all column names one position left
+            # so rank->team, team->conf, conf->record, record->adjoe, etc.
+            old_cols = df.columns.tolist()          # [rank, team, conf, record, adjoe, ...]
+            new_cols = old_cols[1:] + ["_overflow"] # [team, conf, record, adjoe, ..., _overflow]
+            df.columns = new_cols
+            df = df.drop(columns=["_overflow"], errors="ignore")
+
+    # Handle older CSVs where adjt is part of last column name e.g. "fun rk, adjt"
     adjt_candidates = [c for c in df.columns if "adjt" in c and c != "adjt"]
     for col in adjt_candidates:
         df = df.rename(columns={col: "adjt"})
         break
-    # Handle unnamed trailing column (pandas names it "unnamed: N")
-    if "adjt" not in df.columns:
-        unnamed = [c for c in df.columns if "unnamed" in c]
-        if unnamed:
-            df = df.rename(columns={unnamed[-1]: "adjt"})
 
     df = df.rename(columns={
-        "team": "team", "conf": "conference", "record": "record",
+        "conf": "conference", "record": "record",
         "adjoe": "adj_oe", "adjde": "adj_de", "adjt": "adj_tempo",
         "luck": "luck", "sos": "sos_oe", "ncsos": "ncsos",
     })
