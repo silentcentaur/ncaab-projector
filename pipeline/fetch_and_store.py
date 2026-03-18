@@ -85,6 +85,22 @@ def fetch_and_store_team_stats(sb: Client, season: int):
 
     df = pd.read_csv(StringIO(resp.text), header=0)
     df.columns = [c.strip().lower() for c in df.columns]
+
+    # Older Torvik CSVs (pre-2022) have the last column header as "fun rk, adjt"
+    # which pandas splits into two columns due to the comma delimiter.
+    # The actual adjt value lands in a trailing unnamed/misnamed column.
+    # Detect and fix: find the column whose name contains "adjt" or is unnamed
+    # and rename it to "adjt" so the tempo rename below works correctly.
+    adjt_candidates = [c for c in df.columns if "adjt" in c and c != "adjt"]
+    for col in adjt_candidates:
+        df = df.rename(columns={col: "adjt"})
+        break
+    # Handle unnamed trailing column (pandas names it "unnamed: N")
+    if "adjt" not in df.columns:
+        unnamed = [c for c in df.columns if "unnamed" in c]
+        if unnamed:
+            df = df.rename(columns={unnamed[-1]: "adjt"})
+
     df = df.rename(columns={
         "team": "team", "conf": "conference", "record": "record",
         "adjoe": "adj_oe", "adjde": "adj_de", "adjt": "adj_tempo",
@@ -97,6 +113,7 @@ def fetch_and_store_team_stats(sb: Client, season: int):
         df["net_eff"] = df["adj_oe"] - df["adj_de"]
     df = df.dropna(subset=["team"])
     df["season"] = season
+    log.info(f"[{season}]   CSV rows after dropna: {len(df)}, columns present: {[c for c in ['team','adj_oe','adj_de','adj_tempo','sos_oe','ncsos','luck'] if c in df.columns]}")
 
     keep = ["season","team","conference","record","adj_oe","adj_de",
             "adj_tempo","net_eff","luck","sos_oe","ncsos"]
