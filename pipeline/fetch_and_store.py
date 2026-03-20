@@ -132,6 +132,8 @@ def fetch_and_store_team_stats(sb: Client, season: int):
     if "adj_oe" in df.columns and "adj_de" in df.columns:
         df["net_eff"] = df["adj_oe"] - df["adj_de"]
     df = df.dropna(subset=["team"])
+    # Filter out BartTorvik conference summary rows (short abbreviations, no record, garbage efficiency)
+    df = df[df["team"].str.len() > 6]
     df["season"] = season
     log.info(f"[{season}]   CSV rows after dropna: {len(df)}, columns present: {[c for c in ['team','adj_oe','adj_de','adj_tempo','sos_oe','ncsos','luck'] if c in df.columns]}")
 
