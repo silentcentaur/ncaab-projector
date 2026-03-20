@@ -74,7 +74,6 @@ def team_html(region, round_idx, game_idx, slot):
     return f'<div class="{cls}" onclick="{onclick}" title="{title}">{seed_html}<span class="name">{team}</span></div>'
 
 def build_region_rounds(region):
-    """Build the rounds HTML for a single region (no wrapper)."""
     rounds_html = ""
     for r in range(4):
         num_games = 8 // (2**r)
@@ -113,7 +112,6 @@ def build_region_rounds(region):
     return rounds_html
 
 def build_bracket_html(regions):
-    """Build a full HTML doc for one or more regions displayed side by side."""
     if isinstance(regions, str):
         regions = [regions]
 
@@ -145,102 +143,76 @@ body { background: #0a0f1e; font-family: 'DM Sans', sans-serif; overflow-x: auto
         border-radius: 3px; min-width: 18px; text-align: center; flex-shrink: 0; }
 .name { overflow: hidden; text-overflow: ellipsis; }
 .cmp-btn { background: none; border: 1px solid #1e3a5f; color: #475569; cursor: pointer;
-           font-size: 11px; padding: 2px 7px; border-radius: 3px; margin-left: 6px;
+           font-size: 11px; padding: 2px 6px; border-radius: 3px; margin-left: 4px;
            transition: all 0.1s; }
 .cmp-btn:hover { border-color: #f97316; color: #f97316; }
-.divider { width: 1px; background: #1e3a5f; margin: 0 8px; align-self: stretch; flex-shrink: 0; }
-.bracket.mirrored { flex-direction: row-reverse; }
+.final-slot .team { border-color: #f97316; background: #1a1200; color: #fbbf24; }
 """
 
-    MIRRORED = {"West", "Midwest"}
-    inner = ""
-    for i, region in enumerate(regions):
-        mirror_cls = " mirrored" if region in MIRRORED else ""
-        inner += f'<div class="region-block"><div class="region-title">{region}</div><div class="bracket{mirror_cls}">{build_region_rounds(region)}</div></div>'
+    JS = """
+function sendClick(payload) {
+    window.parent.postMessage({type: 'streamlit:setComponentValue', value: payload}, '*');
+}
+"""
+
+    blocks = ""
+    for region in regions:
+        rounds_html = build_region_rounds(region)
+        blocks += f'''
+        <div class="region-block">
+            <div class="region-title">{region} Region</div>
+            <div class="bracket">{rounds_html}</div>
+        </div>'''
 
     return f"""<!DOCTYPE html>
-<html><head><style>{CSS}</style></head>
-<body>
-<script>
-function sendClick(payload) {{
-    window.parent.postMessage({{
-        isStreamlitMessage: true,
-        type: 'streamlit:setComponentValue',
-        value: payload
-    }}, '*');
-}}
-window.addEventListener('message', function(e) {{
-    if (e.data && e.data.type === 'streamlit:render') {{
-        window.parent.postMessage({{isStreamlitMessage: true, type: 'streamlit:componentReady', apiVersion: 1}}, '*');
-    }}
-}});
-window.parent.postMessage({{isStreamlitMessage: true, type: 'streamlit:componentReady', apiVersion: 1}}, '*');
-</script>
-<div class="all-regions">{inner}</div>
+<html><head>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans&family=DM+Mono&display=swap" rel="stylesheet">
+<style>{CSS}</style>
+</head><body>
+<div class="all-regions">{blocks}</div>
+<script>{JS}</script>
 </body></html>"""
 
 def render_comparison_panel(team_a, team_b, region, round_idx, game_idx, df_stats):
-    if df_stats.empty: return
-    ra_rows = df_stats[df_stats["team"] == team_a]
-    rb_rows = df_stats[df_stats["team"] == team_b]
-    if ra_rows.empty or rb_rows.empty:
-        st.info("Stats not available for one or both teams.")
+    st.markdown(f"""
+    <div style="background:#0d1526;border:1px solid #1e2d45;border-radius:8px;padding:1.25rem;margin:0.75rem 0;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#f97316;margin-bottom:0.75rem;letter-spacing:0.05em;">
+            ⚔ {team_a} vs {team_b}
+        </div>""", unsafe_allow_html=True)
+
+    if df_stats.empty:
+        st.markdown("No stats available.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    import plotly.graph_objects as go
-    ra, rb = ra_rows.iloc[0], rb_rows.iloc[0]
+    ra = df_stats[df_stats["team"] == team_a]
+    rb = df_stats[df_stats["team"] == team_b]
 
-    def get_pct(val, col, hib=True):
-        if val is None or pd.isna(val): return 0
-        arr = pd.to_numeric(df_stats[col], errors="coerce").dropna().tolist()
-        if not arr: return 0
-        p = sum(v <= val for v in arr) / len(arr) * 100
-        return p if hib else 100 - p
+    def gv(row_df, col, default=0.0):
+        if row_df.empty: return default
+        v = row_df.iloc[0].get(col)
+        if v is None or (isinstance(v, float) and pd.isna(v)): return default
+        try: return float(v)
+        except: return default
 
-    radar_metrics = [
-        ("Off. Eff.", "adj_oe", True), ("Def. Eff.", "adj_de", False),
-        ("Tempo", "adj_tempo", True), ("eFG%", "efg_pct", True),
-        ("TOV%", "tov_pct", False), ("ORB%", "orb_pct", True),
-        ("FTR", "ftr", True), ("Opp eFG%", "opp_efg_pct", False),
-    ]
-    def row_pcts(row):
-        out = []
-        for _, col, hib in radar_metrics:
-            v = row.get(col)
-            v = float(v) if v is not None and not pd.isna(v) else None
-            out.append(get_pct(v, col, hib) if v is not None else 0)
-        return out
+    net_a = gv(ra,"net_eff"); net_b = gv(rb,"net_eff")
+    ca = "#f97316" if net_a >= net_b else "#64748b"
+    cb = "#f97316" if net_b > net_a  else "#64748b"
 
-    labels = [m[0] for m in radar_metrics]
-    pa, pb = row_pcts(ra), row_pcts(rb)
-    lc = labels+[labels[0]]; pac = pa+[pa[0]]; pbc = pb+[pb[0]]
-
-    st.markdown(f"### ⚔️ {team_a} vs {team_b}")
     rc1, rc2 = st.columns(2)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(r=pac, theta=lc, fill="toself", name=team_a,
-        line=dict(color="#f97316", width=2), fillcolor="rgba(249,115,22,0.15)"))
-    fig.add_trace(go.Scatterpolar(r=pbc, theta=lc, fill="toself", name=team_b,
-        line=dict(color="#06b6d4", width=2), fillcolor="rgba(6,182,212,0.15)"))
-    fig.update_layout(
-        polar=dict(bgcolor="rgba(0,0,0,0)",
-            radialaxis=dict(visible=True, range=[0,100], tickfont=dict(size=8, color="#475569"),
-                gridcolor="#1e2d45", tickvals=[25,50,75,100], ticktext=["25%","50%","75%","100%"]),
-            angularaxis=dict(tickfont=dict(size=10, color="#94a3b8"), gridcolor="#1e2d45")),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#f1f5f9", family="DM Sans"),
-        legend=dict(font=dict(size=10), bgcolor="rgba(0,0,0,0)",
-            x=0.5, y=-0.15, orientation="h", xanchor="center"),
-        margin=dict(l=50, r=50, t=30, b=50), height=300,
-    )
-    rc1.plotly_chart(fig, use_container_width=True)
-
-    def gv(row, col, default=0.0):
-        v = row.get(col)
-        return float(v) if v is not None and not pd.isna(v) else default
-
+    with rc1:
+        st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:{ca};">{team_a}</div>', unsafe_allow_html=True)
+        st.metric("Net Eff", f"{net_a:+.1f}")
+        st.metric("Adj OE",  f"{gv(ra,'adj_oe',100):.1f}")
+        st.metric("Adj DE",  f"{gv(ra,'adj_de',100):.1f}")
     with rc2:
+        st.markdown(f'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:1rem;color:{cb};text-align:right;">{team_b}</div>', unsafe_allow_html=True)
+        st.metric("Net Eff", f"{net_b:+.1f}")
+        st.metric("Adj OE",  f"{gv(rb,'adj_oe',100):.1f}")
+        st.metric("Adj DE",  f"{gv(rb,'adj_de',100):.1f}")
+
+    rc2b = st.columns(2)
+    with rc2b[0]:
         for label, va, vb, hib, fmt in [
             ("Adj OE", gv(ra,"adj_oe",100), gv(rb,"adj_oe",100), True,  ".1f"),
             ("Adj DE", gv(ra,"adj_de",100), gv(rb,"adj_de",100), False, ".1f"),
@@ -365,13 +337,13 @@ def render_final_four(df_stats):
             <div style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;color:#fbbf24;">{champ}</div>
             <div style="font-size:2rem;">🏆</div></div>""", unsafe_allow_html=True)
 
-def show():
+def show(season: int):
     st.markdown('<style>[data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}</style>', unsafe_allow_html=True)
     st.markdown("# 🏆 Bracket Simulator")
     init_bracket()
 
-    df_stats = db.get_team_data()
-    game_df  = db.get_game_history()
+    df_stats = db.get_team_data(season)
+    game_df  = db.get_game_history(season)
     if not df_stats.empty:
         df_stats.columns = [c.lower() for c in df_stats.columns]
         if not game_df.empty:

@@ -19,15 +19,15 @@ def percentile_rank(series, value, higher_is_better=True):
     pct = (s < value).sum() / len(s) * 100
     return pct if higher_is_better else 100 - pct
 
-def show():
+def show(season: int):
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
     </style>""", unsafe_allow_html=True)
     st.markdown("# 📊 Team Explorer")
 
-    df      = db.get_team_data()
-    teams   = db.team_list()
-    game_df = db.get_game_history()
+    df      = db.get_team_data(season)
+    teams   = db.team_list(season)
+    game_df = db.get_game_history(season)
 
     if df.empty or not teams:
         st.warning("No data in database yet. Run the pipeline first.")

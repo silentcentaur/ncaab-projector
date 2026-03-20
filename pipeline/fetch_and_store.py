@@ -58,16 +58,32 @@ def log_refresh(sb, data_type, rows, status, season, message=""):
     }).execute()
 
 def _get_all_ids(sb: Client, table: str, season: int) -> set:
+    """Fetch ALL game_ids from a table, paginating correctly.
+    Fix: use len(resp.data) not len(batch) to detect end of pages,
+    since deduplication would cause len(batch) < PAGE even on full pages.
+    """
     ids, offset = set(), 0
     while True:
         resp = (sb.table(table).select("game_id").eq("season", season)
                   .range(offset, offset + SUPABASE_PAGE - 1).execute())
         batch = {r["game_id"] for r in resp.data if r.get("game_id")}
         ids |= batch
-        if len(batch) < SUPABASE_PAGE:
+        if len(resp.data) < SUPABASE_PAGE:  # use raw row count, not deduplicated set size
             break
         offset += SUPABASE_PAGE
     return ids
+
+def _paginate_table(sb: Client, table: str, season: int, columns: str = "*") -> list:
+    """Fetch ALL rows from a table for a season, paginating past 1000-row limit."""
+    all_rows, offset = [], 0
+    while True:
+        resp = (sb.table(table).select(columns).eq("season", season)
+                  .range(offset, offset + SUPABASE_PAGE - 1).execute())
+        all_rows.extend(resp.data)
+        if len(resp.data) < SUPABASE_PAGE:
+            break
+        offset += SUPABASE_PAGE
+    return all_rows
 
 
 # ── 1. Team Stats ─────────────────────────────────────────────────────────────
@@ -94,10 +110,8 @@ def fetch_and_store_team_stats(sb: Client, season: int):
         conf_like = sum(1 for v in sample if isinstance(v, str) and len(str(v)) <= 5)
         if conf_like >= 7:
             log.info(f"[{season}]   Detected shifted columns — correcting alignment")
-            # Drop the 'rank' header and shift all column names one position left
-            # so rank->team, team->conf, conf->record, record->adjoe, etc.
-            old_cols = df.columns.tolist()          # [rank, team, conf, record, adjoe, ...]
-            new_cols = old_cols[1:] + ["_overflow"] # [team, conf, record, adjoe, ..., _overflow]
+            old_cols = df.columns.tolist()
+            new_cols = old_cols[1:] + ["_overflow"]
             df.columns = new_cols
             df = df.drop(columns=["_overflow"], errors="ignore")
 
@@ -125,7 +139,6 @@ def fetch_and_store_team_stats(sb: Client, season: int):
             "adj_tempo","net_eff","luck","sos_oe","ncsos"]
     df = df[[c for c in keep if c in df.columns]]
 
-    # Deduplicate on (season, team) — older Torvik CSVs sometimes have duplicate rows
     before = len(df)
     df = df.drop_duplicates(subset=["season","team"], keep="first")
     if len(df) < before:
@@ -264,6 +277,7 @@ def calc_four_factors(stats: list, opp_stats: list) -> dict:
     if not _has_real_data(stats) or not _has_real_data(opp_stats):
         return {k: None for k in ["efg_pct","tov_pct","orb_pct","ftr",
                                    "opp_efg_pct","opp_tov_pct","opp_orb_pct","opp_ftr"]}
+
     fgm, fga   = _parse_made_att(stats, "fieldGoalsMade-fieldGoalsAttempted")
     tpm, _     = _parse_made_att(stats, "threePointFieldGoalsMade-threePointFieldGoalsAttempted")
     _, fta     = _parse_made_att(stats, "freeThrowsMade-freeThrowsAttempted")
@@ -297,14 +311,15 @@ def calc_four_factors(stats: list, opp_stats: list) -> dict:
 
 def fetch_and_store_four_factors(sb: Client, season: int):
     log.info(f"[{season}] Fetching four factors…")
-    resp = (sb.table("game_history").select("game_id,date,team,opponent")
-              .eq("season", season).execute())
-    if not resp.data:
+
+    # Fix: paginate game_history fetch — previously only got first 1000 rows
+    gh_rows = _paginate_table(sb, "game_history", season, "game_id,date,team,opponent")
+    if not gh_rows:
         log.warning(f"[{season}]   No game history — skipping")
         return
 
     existing_adv = _get_all_ids(sb, "adv_game_history", season)
-    all_game_ids = list({r["game_id"] for r in resp.data})
+    all_game_ids = list({r["game_id"] for r in gh_rows})
     new_game_ids = [gid for gid in all_game_ids if gid not in existing_adv]
     log.info(f"[{season}]   {len(existing_adv)} already have adv stats — fetching {len(new_game_ids)} new")
 
@@ -313,7 +328,7 @@ def fetch_and_store_four_factors(sb: Client, season: int):
         _aggregate_four_factors_to_team_stats(sb, season)
         return
 
-    game_meta = {r["game_id"]: r for r in resp.data if r["game_id"] not in {}}
+    game_meta = {r["game_id"]: r for r in gh_rows}
     adv_rows, errors = [], 0
 
     for i, game_id in enumerate(new_game_ids):
@@ -362,14 +377,9 @@ def _upsert_adv_rows(sb: Client, rows: list):
 
 def _aggregate_four_factors_to_team_stats(sb: Client, season: int):
     log.info(f"[{season}]   Aggregating four factors…")
-    all_rows, offset = [], 0
-    while True:
-        resp = (sb.table("adv_game_history").select("*").eq("season", season)
-                  .range(offset, offset + SUPABASE_PAGE - 1).execute())
-        all_rows.extend(resp.data)
-        if len(resp.data) < SUPABASE_PAGE:
-            break
-        offset += SUPABASE_PAGE
+
+    # Fix: paginate adv_game_history fetch
+    all_rows = _paginate_table(sb, "adv_game_history", season)
 
     if not all_rows:
         log.warning(f"[{season}]   No adv data to aggregate")

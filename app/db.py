@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SEASON = 2026
-PAGE   = 1000   # Supabase default row limit
+AVAILABLE_SEASONS = list(range(2015, 2027))
+DEFAULT_SEASON    = 2026
+PAGE              = 1000   # Supabase default row limit
 
 @st.cache_resource
 def get_client() -> Client:
@@ -43,9 +44,9 @@ def _paginate(sb: Client, table: str, season: int) -> list:
 
 
 @st.cache_data(ttl=300)
-def get_team_data() -> pd.DataFrame:
+def get_team_data(season: int = DEFAULT_SEASON) -> pd.DataFrame:
     sb = get_client()
-    resp = sb.table("team_stats").select("*").eq("season", SEASON).execute()
+    resp = sb.table("team_stats").select("*").eq("season", season).execute()
     df = pd.DataFrame(resp.data)
     if df.empty:
         return df
@@ -55,15 +56,15 @@ def get_team_data() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300)
-def get_game_history() -> pd.DataFrame:
+def get_game_history(season: int = DEFAULT_SEASON) -> pd.DataFrame:
     sb = get_client()
-    return pd.DataFrame(_paginate(sb, "game_history", SEASON))
+    return pd.DataFrame(_paginate(sb, "game_history", season))
 
 
 @st.cache_data(ttl=300)
-def get_adv_history() -> pd.DataFrame:
+def get_adv_history(season: int = DEFAULT_SEASON) -> pd.DataFrame:
     sb = get_client()
-    return pd.DataFrame(_paginate(sb, "adv_game_history", SEASON))
+    return pd.DataFrame(_paginate(sb, "adv_game_history", season))
 
 
 @st.cache_data(ttl=300)
@@ -77,8 +78,8 @@ def get_refresh_log() -> pd.DataFrame:
     return pd.DataFrame(resp.data)
 
 
-def team_list() -> list[str]:
-    df = get_team_data()
+def team_list(season: int = DEFAULT_SEASON) -> list[str]:
+    df = get_team_data(season)
     if df.empty or "team" not in df.columns:
         return []
     return sorted(df["team"].dropna().tolist())

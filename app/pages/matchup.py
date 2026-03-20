@@ -38,9 +38,8 @@ def compute_win_prob(ra, rb, venue, weights, games_a, games_b):
             return None
 
     def diff(va, vb, flip=False):
-        """Return va-vb (or vb-va if flip), or None if either is missing/zero."""
         if va is None or vb is None: return None
-        if va == 0.0 and vb == 0.0: return None  # both zero = bad data
+        if va == 0.0 and vb == 0.0: return None
         return (vb - va) if flip else (va - vb)
 
     oe_a = g(ra,"adj_oe"); oe_b = g(rb,"adj_oe")
@@ -75,11 +74,10 @@ def expected_score(oe, de, opp_oe, opp_de, tempo, opp_tempo):
     return round(((oe + opp_de) / 2) / 100 * t, 1), round(((opp_oe + de) / 2) / 100 * t, 1)
 
 def stat_bar(label, va, vb, higher_is_better=True, fmt=".2f"):
-    if va is None or vb is None: 
+    if va is None or vb is None:
         st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#334155;margin-bottom:0.75rem;">{label}: no data available</div>', unsafe_allow_html=True)
         return
     if pd.isna(va) or pd.isna(vb): return
-    # Treat 0.0 for both as missing data (bad ESPN box score)
     if va == 0.0 and vb == 0.0:
         st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#334155;margin-bottom:0.75rem;">{label}: no data available</div>', unsafe_allow_html=True)
         return
@@ -105,25 +103,14 @@ def stat_bar(label, va, vb, higher_is_better=True, fmt=".2f"):
 
 DEFAULTS = {"oe":1.0,"de":1.0,"efg":0.8,"tov":0.6,"orb":0.5,"sos":0.4,"form":0.6,"margin":0.4}
 
-# ── Upset signal scoring ───────────────────────────────────────────────────────
-# All signals measure deviation from seed expectation, not absolute quality.
-# Positive score = team_a is better than their seed implies (undervalued).
-# Negative score = team_b is better than their seed implies (undervalued).
-# When seeds are unavailable, signals fall back to T-Rank-relative comparisons.
-
-# Expected T-Rank range per seed based on 2005-2024 tournament data
 SEED_TO_EXPECTED_RANK  = {1:4, 2:11, 3:18, 4:25, 5:33, 6:41, 7:49, 8:57,
                            9:63,10:69,11:74,12:80,13:88,14:96,15:108,16:120}
-# Expected AdjDE (defensive efficiency) per seed — lower = better defense
 SEED_TO_EXPECTED_DE    = {1:88, 2:90, 3:92, 4:94, 5:96, 6:97, 7:98, 8:99,
                            9:100,10:101,11:102,12:103,13:104,14:106,15:108,16:110}
-# Expected AdjEM (efficiency margin) per seed
 SEED_TO_EXPECTED_EM    = {1:28, 2:22, 3:18, 4:14, 5:11, 6:9,  7:7,  8:5,
                            9:4,  10:3, 11:2, 12:1, 13:0, 14:-2,15:-4,16:-6}
-# Expected SOS (strength of schedule) per seed — higher = tougher schedule
 SEED_TO_EXPECTED_SOS   = {1:.24,2:.22,3:.20,4:.18,5:.16,6:.14,7:.12,8:.10,
                            9:.09,10:.08,11:.07,12:.06,13:.05,14:.04,15:.03,16:.02}
-# National average tempo baseline
 AVG_TEMPO = 68.0
 
 SIGNAL_META = {
@@ -142,28 +129,12 @@ def _safe(row, col, default=None):
     except (TypeError, ValueError): return default
 
 def _seed_relative(value, expected_for_seed, scale, invert=False):
-    """
-    Score how much `value` beats or misses the expectation for this seed.
-    invert=True when lower value is better (e.g. AdjDE, T-Rank).
-    Returns a float roughly in [-3, 3].
-    """
     if value is None or expected_for_seed is None: return 0.0
     diff = expected_for_seed - value if invert else value - expected_for_seed
     return diff / scale
 
 def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_override_b=None,
                           rank_override_a=None, rank_override_b=None):
-    """
-    Compute per-signal scores for team_a vs team_b.
-    Every signal measures how much each team over/underperforms their seed expectation.
-    The net difference (team_a score - team_b score) drives the adjustment.
-
-    Falls back gracefully when seeds are not populated (pre-tournament use).
-
-    Returns:
-        adjustment (float): probability nudge for team_a, capped at ±0.12
-        signals    (list):  per-signal breakdown dicts for UI rendering
-    """
     seed_a  = _safe(ra, "seed") or seed_override_a
     seed_b  = _safe(rb, "seed") or seed_override_b
     trank_a = _safe(ra, "barthag_rk") or _safe(ra, "trank") or _safe(ra, "rk") or rank_override_a
@@ -183,8 +154,6 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
 
     raw = {}
 
-    # 1. Seed vs T-Rank gap
-    # How much better/worse is each team's actual rank vs what their seed implies?
     if has_seeds and trank_a and trank_b:
         exp_rank_a = SEED_TO_EXPECTED_RANK.get(sa, sa * 7)
         exp_rank_b = SEED_TO_EXPECTED_RANK.get(sb, sb * 7)
@@ -192,13 +161,10 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
         score_b = _seed_relative(trank_b, exp_rank_b, scale=12, invert=True)
         raw["rank_gap"] = score_a - score_b
     elif trank_a and trank_b:
-        # No seeds: use raw rank difference, normalized to national field (~360 teams)
         raw["rank_gap"] = (trank_b - trank_a) / 60.0
     else:
         raw["rank_gap"] = 0.0
 
-    # 2. Defensive efficiency vs seed expectation
-    # A 12-seed with top-40 defense is a huge mismatch signal
     if has_seeds:
         exp_de_a = SEED_TO_EXPECTED_DE.get(sa, 100)
         exp_de_b = SEED_TO_EXPECTED_DE.get(sb, 100)
@@ -206,11 +172,8 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
         score_b = _seed_relative(adj_de_b, exp_de_b, scale=4, invert=True)
         raw["def_edge"] = score_a - score_b
     else:
-        # No seeds: pure defensive edge, normalized nationally (~4pt avg gap between good/avg)
         raw["def_edge"] = (adj_de_b - adj_de_a) / 4.0
 
-    # 3. Efficiency margin vs seed expectation
-    # A team closer in EM than seed gap suggests = undervalued
     if has_seeds:
         exp_em_a = SEED_TO_EXPECTED_EM.get(sa, 0)
         exp_em_b = SEED_TO_EXPECTED_EM.get(sb, 0)
@@ -220,39 +183,29 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
     else:
         raw["em_mismatch"] = (em_a - em_b) / 8.0
 
-    # 4. Tempo mismatch — benefits the underdog when they are slower
-    # Fewer possessions = more variance = better for the weaker team
     if has_seeds:
         underdog_seed  = max(sa, sb)
         underdog_tempo = tempo_a if sa == underdog_seed else tempo_b
         favorite_tempo = tempo_b if sa == underdog_seed else tempo_a
-        tempo_diff     = favorite_tempo - underdog_tempo  # positive = underdog is slower
-        # Score from team_a's perspective
+        tempo_diff     = favorite_tempo - underdog_tempo
         sign = 1 if sa == underdog_seed else -1
         raw["tempo"] = sign * (tempo_diff / 6.0)
     else:
-        # No seeds: use T-Rank as proxy for who is the underdog
         if trank_a and trank_b:
-            underdog_is_a  = trank_a > trank_b  # higher rank number = weaker team
+            underdog_is_a  = trank_a > trank_b
             tempo_diff     = tempo_b - tempo_a if underdog_is_a else tempo_a - tempo_b
             sign           = 1 if underdog_is_a else -1
             raw["tempo"]   = sign * (tempo_diff / 6.0)
         else:
             raw["tempo"] = 0.0
 
-    # 5. Recent form vs seed expectation
-    # A hot lower seed matters more than a hot 1-seed (expected to win anyway).
-    # Use a mild seed multiplier capped at 1.5x to avoid over-inflating low seeds.
     if has_seeds:
-        seed_weight_a = min(1.0 + (sa - 1) / 30.0, 1.5)   # seed 1 → 1.0, seed 16 → 1.5
+        seed_weight_a = min(1.0 + (sa - 1) / 30.0, 1.5)
         seed_weight_b = min(1.0 + (sb - 1) / 30.0, 1.5)
         raw["form"] = (form_a * seed_weight_a) - (form_b * seed_weight_b)
     else:
         raw["form"] = (form_a - form_b)
 
-    # 6. Strength of schedule vs seed expectation
-    # sos_oe values typically range 0.02–0.28; meaningful difference is ~0.06–0.10.
-    # Scale of 0.08 means a 0.08 SoS gap above expectation = score of 1.0.
     if has_seeds and sos_a is not None and sos_b is not None:
         exp_sos_a = SEED_TO_EXPECTED_SOS.get(sa, 0.10)
         exp_sos_b = SEED_TO_EXPECTED_SOS.get(sb, 0.10)
@@ -264,16 +217,12 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
     else:
         raw["sos"] = 0.0
 
-    # Weighted composite — each signal already in team_a-relative terms
     composite = sum(
         SIGNAL_META[k]["weight"] * float(np.clip(raw[k], -3, 3))
         for k in SIGNAL_META
     )
-
-    # Max ±12pp adjustment
     adjustment = float(np.clip(composite * 0.06, -0.12, 0.12))
 
-    # Build signal list for UI
     signals = []
     for k, meta in SIGNAL_META.items():
         val     = raw[k]
@@ -294,8 +243,7 @@ def compute_upset_signals(ra, rb, games_a, games_b, seed_override_a=None, seed_o
 
 
 def confidence_label(pa):
-    """Return (text, color) confidence tier label based on favorite's win probability."""
-    p = max(pa, 1 - pa)  # always use the higher probability
+    p = max(pa, 1 - pa)
     if p < 0.55:   return "Toss-up",         "#a78bfa"
     if p < 0.65:   return "Lean",             "#06b6d4"
     if p < 0.75:   return "Moderate favorite","#f97316"
@@ -305,7 +253,6 @@ def confidence_label(pa):
 
 def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, adjustment, signals,
                             seed_a=None, region_a=None, seed_b=None, region_b=None):
-    """Render the upset signal breakdown expander in the Streamlit UI."""
     direction = "▲" if adjustment > 0 else ("▼" if adjustment < 0 else "–")
     favored   = team_a if adjustment > 0 else (team_b if adjustment < 0 else "Neither")
     adj_pp    = abs(adjustment) * 100
@@ -347,7 +294,6 @@ def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, ad
                             color:#334155;margin-top:2px;">weight {s['weight']:.2f}</div>
             </div>""", unsafe_allow_html=True)
 
-        # Composite summary bar
         total_pos = sum(s["contrib"] for s in signals if s["contrib"] > 0)
         total_neg = abs(sum(s["contrib"] for s in signals if s["contrib"] < 0))
         total     = total_pos + total_neg or 1
@@ -366,28 +312,26 @@ def render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa_adj, pb_adj, ad
             </div>
         </div>""", unsafe_allow_html=True)
 
-def show():
+def show(season: int):
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
     </style>""", unsafe_allow_html=True)
     st.markdown("# ⚔️ Matchup Simulator")
 
-    df      = db.get_team_data()
-    teams   = db.team_list()
-    game_df = db.get_game_history()
+    df      = db.get_team_data(season)
+    teams   = db.team_list(season)
+    game_df = db.get_game_history(season)
 
     if df.empty or not teams:
         st.warning("No data in database yet. Run the pipeline first.")
         return
     df.columns = [c.lower() for c in df.columns]
 
-    # Build name map from live data
     if not game_df.empty:
         game_df.columns = [c.lower() for c in game_df.columns]
         nm.build(df["team"].dropna().tolist(),
                  game_df["team"].dropna().unique().tolist())
 
-    # ── Team pickers ──────────────────────────────────────────────────────────
     c1, cv, c2 = st.columns([5,1,5])
     with c1: team_a = st.selectbox("Team A", teams, index=None, placeholder="Type to search...")
     with cv: st.markdown("<div style='text-align:center;font-size:1.8rem;color:#64748b;padding-top:1.8rem;'>VS</div>", unsafe_allow_html=True)
@@ -397,8 +341,6 @@ def show():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Model weights ─────────────────────────────────────────────────────────
-    # Initialize session state defaults on first load (must happen before sliders render)
     for k, v in DEFAULTS.items():
         if f"w_{k}" not in st.session_state:
             st.session_state[f"w_{k}"] = v
@@ -422,7 +364,6 @@ def show():
             for k, v in DEFAULTS.items():
                 st.session_state[f"w_{k}"] = v
             st.rerun()
-
 
         active = {k:v for k,v in {"Off.Eff":w_oe,"Def.Eff":w_de,"eFG%":w_efg,
                                    "TOV%":w_tov,"ORB%":w_orb,"SOS":w_sos,
@@ -455,19 +396,16 @@ def show():
     ra = df[df["team"] == team_a].iloc[0]
     rb = df[df["team"] == team_b].iloc[0]
 
-    # Derive T-Rank proxy from net_eff — rank 1 = highest net efficiency in dataset
     df["_net_eff_num"] = pd.to_numeric(df["net_eff"], errors="coerce")
     df["_rank"] = df["_net_eff_num"].rank(ascending=False, method="min").astype("Int64")
     rank_a = int(df.loc[df["team"] == team_a, "_rank"].iloc[0]) if team_a in df["team"].values else None
     rank_b = int(df.loc[df["team"] == team_b, "_rank"].iloc[0]) if team_b in df["team"].values else None
 
-    # Get game history using name map
     games_a = nm.get_team_games(game_df, df, team_a)
     games_b = nm.get_team_games(game_df, df, team_b)
 
     pa_base, pb_base = compute_win_prob(ra, rb, venue, weights, games_a, games_b)
 
-    # ── Upset signal adjustment ───────────────────────────────────────────────
     seed_a, region_a = bs.get_seed(team_a)
     seed_b, region_b = bs.get_seed(team_b)
     adjustment, signals = compute_upset_signals(ra, rb, games_a, games_b,
@@ -478,7 +416,6 @@ def show():
     pa = round(float(np.clip(pa_base + adjustment, 0.05, 0.95)), 4)
     pb = round(1 - pa, 4)
 
-    # ── Win probability banner ────────────────────────────────────────────────
     tier_label, tier_color = confidence_label(pa)
     st.markdown(f"""
     <div class="matchup-banner">
@@ -515,12 +452,10 @@ def show():
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # ── Upset signal breakdown ────────────────────────────────────────────────
     render_signal_breakdown(team_a, team_b, pa_base, pb_base, pa, pb, adjustment, signals,
                             seed_a=seed_a, region_a=region_a,
                             seed_b=seed_b, region_b=region_b)
 
-    # ── Projected score ───────────────────────────────────────────────────────
     oe_a=float(ra.get("adj_oe") or 100); de_a=float(ra.get("adj_de") or 100)
     oe_b=float(rb.get("adj_oe") or 100); de_b=float(rb.get("adj_de") or 100)
     t_a =float(ra.get("adj_tempo") or 68); t_b=float(rb.get("adj_tempo") or 68)
@@ -532,7 +467,6 @@ def show():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Dual radar chart ──────────────────────────────────────────────────────
     import plotly.graph_objects as go
 
     def get_percentile(val, all_vals, higher_is_better=True):
@@ -542,7 +476,7 @@ def show():
         pct = sum(v <= val for v in arr) / len(arr) * 100
         return pct if higher_is_better else 100 - pct
 
-    df2 = db.get_team_data()
+    df2 = db.get_team_data(season)
     if not df2.empty:
         df2.columns = [c.lower() for c in df2.columns]
         def col_vals(col):
@@ -613,7 +547,6 @@ def show():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Factor breakdown ──────────────────────────────────────────────────────
     st.markdown("### Factor Breakdown")
     st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;text-transform:uppercase;margin-bottom:1rem;">How each active factor favors each team</div>', unsafe_allow_html=True)
 
@@ -641,7 +574,6 @@ def show():
             st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.6rem;color:#334155;text-transform:uppercase;margin-top:0.5rem;">weight: {w:.1f}</div>', unsafe_allow_html=True)
             stat_bar(label, va, vb, hib, fmt)
 
-    # ── Recent form ───────────────────────────────────────────────────────────
     st.markdown("### Recent Form (Last 10 Games)")
     fc1, fc2 = st.columns(2)
     for col_w, tname, tgames in [(fc1, team_a, games_a), (fc2, team_b, games_b)]:

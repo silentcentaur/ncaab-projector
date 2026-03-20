@@ -106,19 +106,27 @@ section.main, .block-container { background-color: var(--court) !important; }
 </style>
 """, unsafe_allow_html=True)
 
+import db
+
 with st.sidebar:
     st.markdown("""
     <div style="padding:1rem 0 1.5rem 0;">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;color:#f97316;line-height:1;">
             NCAAB<br><span style="color:#f1f5f9;">MADNESS</span>
         </div>
-        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:#64748b;
-                    letter-spacing:0.1em;text-transform:uppercase;margin-top:4px;">
-            2025–26 Analytics Tool
-        </div>
     </div>
     <hr style="margin-bottom:1rem;">
     """, unsafe_allow_html=True)
+
+    season = st.selectbox(
+        "Season",
+        options=list(reversed(db.AVAILABLE_SEASONS)),
+        index=0,
+        format_func=lambda y: f"{y-1}–{str(y)[2:]}",
+        key="season",
+    )
+
+    st.markdown("<div style='margin-bottom:0.75rem;'></div>", unsafe_allow_html=True)
 
     page = st.radio(
         "Navigation",
@@ -126,10 +134,10 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
-if   "Overview"  in page: from pages import overview;         overview.show()
-elif "Explorer"  in page: from pages import explorer;         explorer.show()
-elif "Simulator" in page: from pages import matchup;          matchup.show()
-elif "Compare"   in page: from pages import matchup_compare;  matchup_compare.show()
-elif "Game Log"  in page: from pages import gamelog;          gamelog.show()
-elif "Bracket"   in page: from pages import bracket;          bracket.show()
+if   "Overview"  in page: from pages import overview;         overview.show(season)
+elif "Explorer"  in page: from pages import explorer;         explorer.show(season)
+elif "Simulator" in page: from pages import matchup;          matchup.show(season)
+elif "Compare"   in page: from pages import matchup_compare;  matchup_compare.show(season)
+elif "Game Log"  in page: from pages import gamelog;          gamelog.show(season)
+elif "Bracket"   in page: from pages import bracket;          bracket.show(season)
 elif "Status"    in page: from pages import status;           status.show()

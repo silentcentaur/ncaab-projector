@@ -6,7 +6,6 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import db
 
-# Plot theme without xaxis/yaxis so individual charts can set their own
 PLOT_THEME = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
@@ -58,8 +57,7 @@ def rankings_html(df_top):
     html += '</div>'
     return html
 
-def show():
-    # Force dark background regardless of Streamlit theme setting
+def show(season: int):
     st.markdown("""
     <style>
     [data-testid="stAppViewContainer"], section.main, .block-container,
@@ -67,16 +65,16 @@ def show():
         background-color: #0a0f1e !important;
         color: #f1f5f9 !important;
     }
-    /* Fix plotly chart backgrounds in light mode */
     .js-plotly-plot .plotly .bg { fill: rgba(0,0,0,0) !important; }
     </style>
     """, unsafe_allow_html=True)
 
+    season_label = f"{season-1}–{str(season)[2:]}"
     st.markdown("# 🏀 Overview")
-    st.markdown('<div class="tag">Season 2025–26</div><br>', unsafe_allow_html=True)
+    st.markdown(f'<div class="tag">Season {season_label}</div><br>', unsafe_allow_html=True)
 
-    df      = db.get_team_data()
-    game_df = db.get_game_history()
+    df      = db.get_team_data(season)
+    game_df = db.get_game_history(season)
 
     if df.empty:
         st.warning("No data in database yet. Run the pipeline first.")
@@ -109,11 +107,11 @@ def show():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Efficiency scatter ────────────────────────────────────────────────────
-    st.markdown("### 📍 Efficiency Landscape")
-    st.markdown('<div class="tag">Offense vs Defense · NCAA Tournament Teams</div><br>', unsafe_allow_html=True)
+    # ── Efficiency scatter (2026 only — requires bracket seed data) ───────────
+    if season == 2026 and "adj_oe" in df.columns and "adj_de" in df.columns:
+        st.markdown("### 📍 Efficiency Landscape")
+        st.markdown('<div class="tag">Offense vs Defense · NCAA Tournament Teams</div><br>', unsafe_allow_html=True)
 
-    if "adj_oe" in df.columns and "adj_de" in df.columns:
         from bracket_seeds import BRACKET_2026
 
         seed_map   = {}
@@ -131,7 +129,6 @@ def show():
 
         plot_df = tourn_df.copy()
 
-        # 8 visually distinct colors, cycling so adjacent seeds never match
         PALETTE = ["#fbbf24","#ef4444","#a78bfa","#38bdf8","#f97316","#22c55e","#e879f9","#60a5fa"]
         SEED_COLORS = {s: PALETTE[(s - 1) % 8] for s in range(1, 17)}
         color_map = {str(s): SEED_COLORS[s] for s in range(1, 17)}
@@ -187,6 +184,42 @@ def show():
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('<div style="font-family:monospace;font-size:0.65rem;color:#475569;margin-top:-0.5rem;">💡 Double-click any seed in the legend to isolate it · Double-click again to reset</div><br>', unsafe_allow_html=True)
 
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── All-teams efficiency scatter for historical seasons ───────────────────
+    elif "adj_oe" in df.columns and "adj_de" in df.columns:
+        st.markdown("### 📍 Efficiency Landscape")
+        st.markdown('<div class="tag">Offense vs Defense · All D1 Teams</div><br>', unsafe_allow_html=True)
+
+        if "conference" in df.columns:
+            confs = df["conference"].dropna().unique().tolist()
+            conf_color_map = {c: CONF_COLORS[i % len(CONF_COLORS)] for i, c in enumerate(sorted(confs))}
+            fig = px.scatter(
+                df, x="adj_oe", y="adj_de",
+                hover_name="team", color="conference",
+                color_discrete_map=conf_color_map,
+                hover_data={c: True for c in ["record","net_eff"] if c in df.columns},
+                labels={"adj_oe":"Adj. Offensive Efficiency","adj_de":"Adj. Defensive Efficiency"},
+            )
+        else:
+            fig = px.scatter(df, x="adj_oe", y="adj_de", hover_name="team")
+
+        fig.update_yaxes(autorange="reversed", **GRID)
+        fig.update_xaxes(**GRID)
+        fig.update_traces(marker=dict(size=7, opacity=0.75))
+
+        med_oe = df["adj_oe"].median(); med_de = df["adj_de"].median()
+        for val, axis in [(med_oe,"x"),(med_de,"y")]:
+            fig.add_shape(type="line",
+                x0=val if axis=="x" else df["adj_oe"].min(),
+                x1=val if axis=="x" else df["adj_oe"].max(),
+                y0=val if axis=="y" else df["adj_de"].min(),
+                y1=val if axis=="y" else df["adj_de"].max(),
+                line=dict(color="#1e2d45", width=1, dash="dot"))
+
+        fig.update_layout(**PLOT_THEME, height=560,
+                          legend=dict(title="Conference", font=dict(size=9), bgcolor="rgba(0,0,0,0)"))
+        st.plotly_chart(fig, use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Best offense vs best defense ──────────────────────────────────────────

@@ -13,7 +13,6 @@ MAX_SLOTS = 4
 def init_state():
     if "cmp_slots" not in st.session_state:
         st.session_state.cmp_slots = [{"a": None, "b": None} for _ in range(MAX_SLOTS)]
-    # Always ensure 4 slots exist
     while len(st.session_state.cmp_slots) < MAX_SLOTS:
         st.session_state.cmp_slots.append({"a": None, "b": None})
 
@@ -21,7 +20,6 @@ def get_weights():
     return {k: st.session_state.get(f"w_{k}", v) for k, v in DEFAULTS.items()}
 
 def seed_buttons(teams, df, seed_map, bracket_seeds):
-    """Render seed pair buttons — clicking fills all 4 slots with that matchup across all regions."""
     st.markdown('<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Load all 4 regional matchups by seed pairing</div>', unsafe_allow_html=True)
     SEED_PAIRS = [(1,16),(8,9),(5,12),(4,13),(6,11),(3,14),(7,10),(2,15)]
     REGIONS = ["East","West","South","Midwest"]
@@ -35,11 +33,9 @@ def seed_buttons(teams, df, seed_map, bracket_seeds):
                     ta = seeds.get(s1)
                     tb = seeds.get(s2)
                     new_slots.append({"a": ta, "b": tb})
-                # Pad to 4 slots if fewer than 4 regions returned valid pairs
                 while len(new_slots) < MAX_SLOTS:
                     new_slots.append({"a": None, "b": None})
                 st.session_state.cmp_slots = new_slots
-                # Write directly to selectbox keys to override cached widget state
                 for i, slot in enumerate(new_slots):
                     st.session_state[f"slot_{i}_a"] = slot["a"]
                     st.session_state[f"slot_{i}_b"] = slot["b"]
@@ -52,47 +48,25 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     key_a, key_b = f"slot_{idx}_a", f"slot_{idx}_b"
     seed_flag = f"slot_{idx}_seeded"
 
-    # Only force-update widget keys when a seed button just populated this slot
     if st.session_state.get(seed_flag):
         if slot["a"] and slot["a"] in teams:
             st.session_state[key_a] = slot["a"]
         if slot["b"] and slot["b"] in teams:
             st.session_state[key_b] = slot["b"]
-        st.session_state[seed_flag] = False  # clear flag after applying
+        st.session_state[seed_flag] = False
 
-    # Initialize keys if they don't exist yet
-    if key_a not in st.session_state:
-        st.session_state[key_a] = slot["a"] if slot["a"] and slot["a"] in teams else None
-    if key_b not in st.session_state:
-        st.session_state[key_b] = slot["b"] if slot["b"] and slot["b"] in teams else None
-
-    # Team pickers
-    c1, cv, c2, cx = st.columns([5, 0.6, 5, 0.4])
+    c1, cv, c2 = st.columns([5, 1, 5])
     with c1:
-        team_a = st.selectbox(
-            "Team A", [None] + teams,
-            format_func=lambda x: "Search..." if x is None else x,
-            key=key_a, label_visibility="collapsed"
-        )
+        team_a = st.selectbox(f"Team A (Matchup {idx+1})", teams,
+                              index=teams.index(st.session_state[key_a]) if st.session_state.get(key_a) in teams else None,
+                              placeholder="Type to search...", key=key_a, label_visibility="collapsed")
     with cv:
-        st.markdown("<div style='text-align:center;color:#334155;padding-top:0.4rem;font-size:1.1rem;'>vs</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center;color:#334155;padding-top:8px;font-size:0.8rem;'>vs</div>", unsafe_allow_html=True)
     with c2:
-        team_b = st.selectbox(
-            "Team B", [None] + teams,
-            format_func=lambda x: "Search..." if x is None else x,
-            key=key_b, label_visibility="collapsed"
-        )
-    with cx:
-        if st.button("✕", key=f"slot_{idx}_clear", help="Clear this matchup"):
-            st.session_state.cmp_slots[idx] = {"a": None, "b": None}
-            for k in [key_a, key_b]:
-                if k in st.session_state:
-                    del st.session_state[k]
-            st.rerun()
+        team_b = st.selectbox(f"Team B (Matchup {idx+1})", teams,
+                              index=teams.index(st.session_state[key_b]) if st.session_state.get(key_b) in teams else None,
+                              placeholder="Type to search...", key=key_b, label_visibility="collapsed")
 
-    # Sync slot from widget values (not the reverse)
-    team_a = st.session_state.get(key_a)
-    team_b = st.session_state.get(key_b)
     st.session_state.cmp_slots[idx] = {"a": team_a, "b": team_b}
 
     if not team_a or not team_b or team_a == team_b:
@@ -102,30 +76,23 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     rb = df[df["team"] == team_b]
     if ra.empty or rb.empty:
         return None
-    ra, rb = ra.iloc[0], rb.iloc[0]
+    ra = ra.iloc[0]; rb = rb.iloc[0]
 
     games_a = nm.get_team_games(game_df, df, team_a)
     games_b = nm.get_team_games(game_df, df, team_b)
 
-    pa_base, pb_base = compute_win_prob(ra, rb, "Neutral", weights, games_a, games_b)
-
-    # Derive rank from net_eff across full dataset
     df["_net_eff_num"] = pd.to_numeric(df["net_eff"], errors="coerce")
     df["_rank"] = df["_net_eff_num"].rank(ascending=False, method="min").astype("Int64")
     rank_a = int(df.loc[df["team"] == team_a, "_rank"].iloc[0]) if team_a in df["team"].values else None
     rank_b = int(df.loc[df["team"] == team_b, "_rank"].iloc[0]) if team_b in df["team"].values else None
 
-    seed_a_val, _ = bs.get_seed(team_a)
-    seed_b_val, _ = bs.get_seed(team_b)
-    # Fall back to seed_map (built from bracket) if get_seed misses
-    if seed_a_val is None: seed_a_val = seed_map.get(team_a)
-    if seed_b_val is None: seed_b_val = seed_map.get(team_b)
+    seed_a = seed_map.get(team_a)
+    seed_b = seed_map.get(team_b)
 
+    pa_base, pb_base = compute_win_prob(ra, rb, "Neutral", weights, games_a, games_b)
     adjustment, _ = compute_upset_signals(ra, rb, games_a, games_b,
-                                          seed_override_a=seed_a_val,
-                                          seed_override_b=seed_b_val,
-                                          rank_override_a=rank_a,
-                                          rank_override_b=rank_b)
+                                          seed_override_a=seed_a, seed_override_b=seed_b,
+                                          rank_override_a=rank_a, rank_override_b=rank_b)
     pa = round(float(np.clip(pa_base + adjustment, 0.05, 0.95)), 4)
     pb = round(1 - pa, 4)
 
@@ -151,11 +118,6 @@ def render_slot(idx, teams, df, game_df, weights, seed_map):
     }
 
 def upset_risk_score(r):
-    """
-    Score upset risk for the underdog using weighted continuous signals.
-    Each signal fires on a 0.0-1.0 scale based on how strongly the condition is met.
-    Returns (pct 0-100, label, color, signals list of (name, strength)).
-    """
     pa, pb = r["pa"], r["pb"]
     if pa >= pb:
         fav_net  = r.get("net_a") or 0;  dog_net  = r.get("net_b") or 0
@@ -180,93 +142,70 @@ def upset_risk_score(r):
         return max(lo, min(hi, v))
 
     signals = []
+
     net_gap = fav_net - dog_net
+    net_s = clamp(1.0 - net_gap / 20.0)
+    signals.append(("Net eff gap", net_s))
 
-    # ── Kill switch: massive gap = near zero risk ─────────────────────────────
-    if net_gap > 25:
-        return 0, "No upset", "#334155", [("Net gap >25", 0.0)]
-
-    # ── Tier 1 (weight 0.40 total) ────────────────────────────────────────────
-    # Net efficiency gap — smaller gap = higher risk, scale 0-15pt range
-    net_sig = clamp(1.0 - (net_gap / 15.0))
-    signals.append(("Net eff gap", net_sig, 0.25))
-
-    # Underdog net efficiency floor — not a pushover
-    dog_net_sig = clamp((dog_net + 5) / 20.0)  # -5 → 0.0, +15 → 1.0
-    signals.append(("Underdog strength", dog_net_sig, 0.15))
-
-    # ── Tier 2 (weight 0.45 total) ────────────────────────────────────────────
-    # eFG% — how much does underdog close or exceed the gap
     if fav_efg and dog_efg:
-        efg_diff = dog_efg - fav_efg  # positive = underdog better
-        efg_sig = clamp(0.5 + efg_diff / 0.06)  # ±0.03 range maps to 0-1
-        signals.append(("eFG% edge", efg_sig, 0.15))
+        efg_s = clamp((dog_efg - fav_efg + 0.05) / 0.10)
+        signals.append(("eFG% edge", efg_s))
 
-    # TOV% — lower is better; underdog advantage
     if fav_tov and dog_tov:
-        tov_diff = fav_tov - dog_tov  # positive = underdog better
-        tov_sig = clamp(0.5 + tov_diff / 0.04)
-        signals.append(("TOV% edge", tov_sig, 0.12))
+        tov_s = clamp((fav_tov - dog_tov + 0.03) / 0.06)
+        signals.append(("TOV% edge", tov_s))
 
-    # Tempo — slower underdog compresses game, more variance
-    tempo_diff = fav_tmp - dog_tmp  # positive = underdog slower
-    tempo_sig = clamp(0.5 + tempo_diff / 10.0)
-    signals.append(("Tempo mismatch", tempo_sig, 0.10))
+    if fav_orb and dog_orb:
+        orb_s = clamp((dog_orb - fav_orb + 0.03) / 0.06)
+        signals.append(("ORB% edge", orb_s))
 
-    # ORB% — underdog offensive rebounding
-    if dog_orb:
-        orb_sig = clamp((dog_orb - 0.25) / 0.15)  # 0.25→0.0, 0.40→1.0
-        signals.append(("Underdog ORB%", orb_sig, 0.08))
+    tempo_diff = abs(fav_tmp - dog_tmp)
+    tempo_s = clamp(tempo_diff / 10.0) * (0.6 if dog_tmp < fav_tmp else 0.3)
+    signals.append(("Tempo mismatch", tempo_s))
 
-    # ── Tier 3 (weight 0.15 total) ────────────────────────────────────────────
-    # SOS — underdog played tougher schedule than seed implies
     if fav_sos and dog_sos:
-        sos_diff = dog_sos - fav_sos  # positive = underdog tougher schedule
-        sos_sig = clamp(0.5 + sos_diff / 0.4)
-        signals.append(("SOS edge", sos_sig, 0.08))
+        sos_s = clamp((dog_sos - fav_sos + 0.05) / 0.15)
+        signals.append(("SOS advantage", sos_s))
 
-    # Favorite's defense quality — weaker favorite D = easier path for underdog
-    if fav_de:
-        de_sig = clamp((fav_de - 92) / 15.0)  # 92→0.0 (elite D), 107→1.0 (weak D)
-        signals.append(("Favorite def.", de_sig, 0.07))
+    if fav_de and dog_de:
+        de_s = clamp((fav_de - dog_de + 3) / 8.0)
+        signals.append(("Def efficiency", de_s))
 
-    # ── Weighted sum → 0-100% ─────────────────────────────────────────────────
-    total_weight = sum(w for _, _, w in signals)
-    raw_score = sum(v * w for _, v, w in signals) / total_weight if total_weight else 0
-    pct = round(raw_score * 100)
+    WEIGHTS = [0.30, 0.18, 0.15, 0.12, 0.10, 0.08, 0.07]
+    total_w = sum(WEIGHTS[:len(signals)])
+    score = sum(s * WEIGHTS[i] for i, (_, s) in enumerate(signals)) / (total_w or 1)
+    pct = round(score * 100)
 
-    if pct < 20:  label, color = "Very low",  "#475569"
-    elif pct < 35: label, color = "Low",       "#64748b"
-    elif pct < 50: label, color = "Possible",  "#854F0B"
-    elif pct < 62: label, color = "Moderate",  "#f97316"
-    elif pct < 75: label, color = "High",      "#ef4444"
-    else:          label, color = "Danger",    "#a855f7"
+    if pct >= 60:   label, color = "High",   "#ef4444"
+    elif pct >= 40: label, color = "Medium", "#f97316"
+    elif pct >= 20: label, color = "Low",    "#fbbf24"
+    else:           label, color = "Minimal","#22c55e"
 
-    signal_summary = [(name, round(val * 100)) for name, val, _ in signals]
-    return pct, label, color, signal_summary
-
+    return pct, label, color, signals
 
 def win_prob_card(result):
     pa, pb = result["pa"], result["pb"]
     ca = "#f97316" if pa >= pb else "#64748b"
-    cb = "#f97316" if pb > pa else "#64748b"
+    cb = "#f97316" if pb > pa  else "#64748b"
     favored = result["team_a"] if pa >= pb else result["team_b"]
-    seed_a = f'<span style="font-size:0.7rem;color:#64748b;"> #{result["seed_a"]}</span>' if result["seed_a"] else ""
-    seed_b = f'<span style="font-size:0.7rem;color:#64748b;"> #{result["seed_b"]}</span>' if result["seed_b"] else ""
     tier_label, tier_color = confidence_label(pa)
+
+    seed_a = f' <span style="font-size:0.6rem;color:#64748b;">#{result["seed_a"]}</span>' if result.get("seed_a") else ""
+    seed_b = f' <span style="font-size:0.6rem;color:#64748b;">#{result["seed_b"]}</span>' if result.get("seed_b") else ""
+
     return f"""
     <div style="background:#111827;border:1px solid #1e2d45;border-radius:8px;padding:1rem;margin-bottom:0.5rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-            <div style="text-align:left;">
+            <div>
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:#f1f5f9;">{result["team_a"]}{seed_a}</div>
                 <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:{ca};">{pa*100:.0f}%</div>
                 <div style="font-family:'DM Mono',monospace;font-size:0.55rem;color:#475569;">{result["record_a"]}</div>
             </div>
             <div style="text-align:center;">
-                <div style="display:inline-block;padding:3px 10px;border-radius:20px;
+                <div style="display:inline-block;padding:2px 8px;border-radius:12px;
                             background:{tier_color}22;border:1px solid {tier_color}66;
                             font-family:'DM Mono',monospace;font-size:0.55rem;
-                            color:{tier_color};letter-spacing:0.06em;margin-bottom:6px;">
+                            color:{tier_color};letter-spacing:0.05em;margin-bottom:4px;">
                     {tier_label.upper()}
                 </div>
                 <div style="color:#334155;font-size:0.8rem;">vs</div>
@@ -286,7 +225,7 @@ def win_prob_card(result):
         </div>
     </div>"""
 
-def show():
+def show(season: int):
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
     </style>""", unsafe_allow_html=True)
@@ -294,9 +233,9 @@ def show():
 
     init_state()
 
-    df      = db.get_team_data()
-    teams   = db.team_list()
-    game_df = db.get_game_history()
+    df      = db.get_team_data(season)
+    teams   = db.team_list(season)
+    game_df = db.get_game_history(season)
 
     if df.empty or not teams:
         st.warning("No data yet. Run the pipeline first.")
@@ -306,7 +245,6 @@ def show():
         game_df.columns = [c.lower() for c in game_df.columns]
         nm.build(df["team"].dropna().tolist(), game_df["team"].dropna().unique().tolist())
 
-    # Build seed map by reading bracket_seeds directly — avoids stale module cache
     seed_map = {}
     bracket_seeds_dict = {}
     try:
@@ -330,13 +268,10 @@ def show():
 
     weights = get_weights()
 
-    # ── Seed quick-add buttons ────────────────────────────────────────────────
     seed_buttons(teams, df, seed_map, bracket_seeds_dict)
     st.markdown("<br>", unsafe_allow_html=True)
-
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Render slots & collect results ───────────────────────────────────────
     results = []
     for idx in range(MAX_SLOTS):
         with st.container():
@@ -349,7 +284,6 @@ def show():
     if not results:
         return
 
-    # ── Headline cards ────────────────────────────────────────────────────────
     st.markdown("### Win Probabilities")
     card_cols = st.columns(len(results))
     for i, (col, r) in enumerate(zip(card_cols, results)):
@@ -358,7 +292,6 @@ def show():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Comparison table ──────────────────────────────────────────────────────
     st.markdown("### Detailed Stats Comparison")
 
     STATS = [
@@ -383,7 +316,6 @@ def show():
         better_a = (va > vb) if higher_is_better else (va < vb)
         return ("#f97316", "#475569") if better_a else ("#475569", "#f97316")
 
-    # Build header
     header_html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-family:\'DM Mono\',monospace;font-size:0.7rem;">'
     header_html += '<thead><tr style="border-bottom:1px solid #1e2d45;">'
     header_html += '<th style="text-align:left;padding:8px 12px;color:#475569;text-transform:uppercase;letter-spacing:0.08em;">Stat</th>'
@@ -397,7 +329,6 @@ def show():
         header_html += f'<th style="text-align:center;padding:4px 12px;color:#64748b;">{r["team_b"]}</th>'
     header_html += '</tr></thead><tbody>'
 
-    # Build rows
     for label, key_a, key_b, hib, fmt in STATS:
         row_html = f'<tr style="border-bottom:1px solid #0f172a;">'
         row_html += f'<td style="padding:8px 12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">{label}</td>'
@@ -410,7 +341,6 @@ def show():
         row_html += '</tr>'
         header_html += row_html
 
-    # Upset risk row
     upset_row = '<tr style="border-top:2px solid #1e2d45;border-bottom:1px solid #0f172a;background:#0d1526;">'
     upset_row += '<td style="padding:8px 12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;">Upset Risk</td>'
     for r in results:
