@@ -405,12 +405,12 @@ def build(bart_names: list, espn_names: list):
 
 def to_espn(bart_name: str) -> str:
     """Convert BartTorvik short name to ESPN full name."""
-    return _b2e.get(bart_name, bart_name)
+    return _b2e.get(bart_name) or MANUAL.get(bart_name, bart_name)
 
 
 def to_bart(espn_name: str) -> str:
     """Convert ESPN full name to BartTorvik short name."""
-    return _e2b.get(espn_name, espn_name)
+    return _e2b.get(espn_name) or _MANUAL_INV.get(espn_name, espn_name)
 
 
 def enrich_game_df(game_df: pd.DataFrame, team_df: pd.DataFrame) -> pd.DataFrame:
