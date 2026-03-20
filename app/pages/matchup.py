@@ -406,8 +406,8 @@ def show(season: int):
 
     pa_base, pb_base = compute_win_prob(ra, rb, venue, weights, games_a, games_b)
 
-    seed_a, region_a = bs.get_seed(team_a)
-    seed_b, region_b = bs.get_seed(team_b)
+    seed_a, region_a = bs.get_seed(team_a, season)
+    seed_b, region_b = bs.get_seed(team_b, season)
     adjustment, signals = compute_upset_signals(ra, rb, games_a, games_b,
                                                 seed_override_a=seed_a,
                                                 seed_override_b=seed_b,
