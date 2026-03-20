@@ -255,21 +255,20 @@ def show(season: int):
         )
         _mod = importlib.util.module_from_spec(_spec)
         _spec.loader.exec_module(_mod)
-        bracket_seeds_dict = _mod.BRACKET_2026
-        for region, seeds in _mod.BRACKET_2026.items():
+        bracket_seeds_dict = _mod.BRACKETS.get(season, {})
+        for region, seeds in _mod.BRACKETS.get(season, {}).items():
             for seed, team in seeds.items():
                 if team:
                     seed_map[team] = seed
     except Exception as e:
         st.warning(f"Could not load bracket seeds: {e}")
 
-    if not seed_map:
-        st.warning("Seed map is empty — check bracket_seeds.py is accessible.")
-
     weights = get_weights()
 
-    seed_buttons(teams, df, seed_map, bracket_seeds_dict)
-    st.markdown("<br>", unsafe_allow_html=True)
+    if bracket_seeds_dict:
+        seed_buttons(teams, df, seed_map, bracket_seeds_dict)
+        st.markdown("<br>", unsafe_allow_html=True)
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     results = []
