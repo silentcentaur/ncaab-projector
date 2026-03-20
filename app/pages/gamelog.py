@@ -11,14 +11,14 @@ PLOT_THEME = dict(
 )
 GRID = dict(gridcolor="#1e2d45", zerolinecolor="#1e2d45")
 
-def show():
+def show(season: int):
     st.markdown("""<style>
     [data-testid="stAppViewContainer"],section.main,.block-container{background-color:#0a0f1e!important;}
     </style>""", unsafe_allow_html=True)
     st.markdown("# 📈 Game Log")
 
-    game_df = db.get_game_history()
-    team_df = db.get_team_data()
+    game_df = db.get_game_history(season)
+    team_df = db.get_team_data(season)
 
     if game_df.empty:
         st.warning("No game log data in database yet. Run the pipeline first.")
