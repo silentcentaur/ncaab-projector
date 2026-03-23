@@ -265,8 +265,19 @@ def show(season: int):
 
     weights = get_weights()
 
+    # For tournament seasons, restrict dropdowns to seeded teams sorted by seed.
+    # Fall back to full list for non-tournament seasons (e.g. 2020).
+    if seed_map:
+        seeded_teams = sorted(
+            [t for t in seed_map if t in teams],
+            key=lambda t: seed_map[t]
+        )
+        display_teams = seeded_teams if seeded_teams else teams
+    else:
+        display_teams = teams
+
     if bracket_seeds_dict:
-        seed_buttons(teams, df, seed_map, bracket_seeds_dict)
+        seed_buttons(display_teams, df, seed_map, bracket_seeds_dict)
         st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -275,7 +286,7 @@ def show(season: int):
     for idx in range(MAX_SLOTS):
         with st.container():
             st.markdown(f'<div style="font-family:\'DM Mono\',monospace;font-size:0.65rem;color:#475569;text-transform:uppercase;margin-bottom:4px;">Matchup {idx+1}</div>', unsafe_allow_html=True)
-            result = render_slot(idx, teams, df, game_df, weights, seed_map)
+            result = render_slot(idx, display_teams, df, game_df, weights, seed_map)
             if result:
                 results.append(result)
         st.markdown("---")
