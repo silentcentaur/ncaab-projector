@@ -132,14 +132,21 @@ def fetch_and_store_team_stats(sb: Client, season: int):
     if "adj_oe" in df.columns and "adj_de" in df.columns:
         df["net_eff"] = df["adj_oe"] - df["adj_de"]
     df = df.dropna(subset=["team"])
-    # Filter out BartTorvik conference summary rows (short abbreviations, no record, garbage efficiency)
-    df = df[df["team"].str.len() > 6]
     df["season"] = season
     log.info(f"[{season}]   CSV rows after dropna: {len(df)}, columns present: {[c for c in ['team','adj_oe','adj_de','adj_tempo','sos_oe','ncsos','luck'] if c in df.columns]}")
 
     keep = ["season","team","conference","record","adj_oe","adj_de",
             "adj_tempo","net_eff","luck","sos_oe","ncsos"]
     df = df[[c for c in keep if c in df.columns]]
+
+    # Filter out BartTorvik conference summary rows (MWC, WAC, etc.)
+    # These have impossibly high net_eff values (60–160) vs real teams (max ~45)
+    if "net_eff" in df.columns:
+        before_filter = len(df)
+        df = df[pd.to_numeric(df["net_eff"], errors="coerce").fillna(0) < 50]
+        dropped = before_filter - len(df)
+        if dropped:
+            log.info(f"[{season}]   Filtered {dropped} conference summary rows")
 
     before = len(df)
     df = df.drop_duplicates(subset=["season","team"], keep="first")
