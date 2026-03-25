@@ -66,18 +66,18 @@ CSS = """
     border: 1px solid #1e2d45;
     border-radius: 6px;
     overflow: hidden;
-    margin-bottom: 6px;
+    margin-bottom: 12px;
 }
 .bk-card-team {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 8px;
+    padding: 3px 8px;
     font-family: 'DM Mono', monospace;
     font-size: 0.65rem;
     color: #94a3b8;
     border-bottom: 1px solid #1e2d45;
-    min-height: 28px;
+    min-height: 26px;
     cursor: default;
 }
 .bk-card-team.last { border-bottom: none; }
@@ -140,6 +140,15 @@ div[data-testid="stButton"] > button {
 /* Remove extra padding Streamlit wraps around buttons */
 div[data-testid="stButton"] {
     margin: 0 !important;
+    padding: 0 !important;
+}
+/* Collapse vertical gap between column rows inside matchup cards */
+div[data-testid="stHorizontalBlock"] {
+    gap: 0px !important;
+    margin-bottom: 0px !important;
+    align-items: center !important;
+}
+div[data-testid="stColumn"] {
     padding: 0 !important;
 }
 </style>
@@ -235,7 +244,7 @@ def matchup_card(season, region, rnd, game):
                 st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
         if not is_last:
-            st.markdown("<div style='height:1px;background:#1e2d45;margin:0;'></div>",
+            st.markdown("<div style='height:0px;'></div>",
                         unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -291,7 +300,7 @@ def ff_card(season, matchup_idx, r1, r2):
                     _s(season)["champion"] = None
                     st.rerun()
             if i == 0:
-                st.markdown("<div style='height:1px;background:#1e2d45;margin:0;'></div>",
+                st.markdown("<div style='height:0px;'></div>",
                             unsafe_allow_html=True)
 
 
@@ -338,7 +347,7 @@ def champ_card(season):
                     _s(season)["champion"] = team
                     st.rerun()
             if i == 0:
-                st.markdown("<div style='height:1px;background:#1e2d45;margin:0;'></div>",
+                st.markdown("<div style='height:0px;'></div>",
                             unsafe_allow_html=True)
 
     if champ:
