@@ -14,25 +14,25 @@ BRACKET_2026 = {
     "East": {
         1: "Duke", 2: "Connecticut", 3: "Michigan St.", 4: "Kansas",
         5: "St. John's", 6: "Louisville", 7: "UCLA", 8: "Ohio St.",
-        9: "TCU", 10: "North Carolina St.", 11: "South Florida", 12: "Northern Iowa",
-        13: "CA Baptist", 14: "North Dakota St.", 15: "Furman", 16: "Siena",
+        9: "TCU", 10: "NC State", 11: "South Florida", 12: "Northern Iowa",
+        13: "Cal Baptist", 14: "North Dakota St.", 15: "Furman", 16: "Siena",
     },
     "South": {
         1: "Florida", 2: "Houston", 3: "Illinois", 4: "Nebraska",
         5: "Vanderbilt", 6: "North Carolina", 7: "Saint Mary's", 8: "Clemson",
-        9: "Iowa", 10: "Texas A&M", 11: "VCU", 12: "McNeese",
-        13: "Troy", 14: "Penn", 15: "Idaho", 16: "Prairie View",
+        9: "Iowa", 10: "Texas A&M", 11: "VCU", 12: "McNeese St.",
+        13: "Troy", 14: "Pennsylvania", 15: "Idaho", 16: "Prairie View A&M",
     },
     "West": {
         1: "Arizona", 2: "Purdue", 3: "Gonzaga", 4: "Arkansas",
         5: "Wisconsin", 6: "BYU", 7: "Miami FL", 8: "Villanova",
         9: "Utah St.", 10: "SMU", 11: "Texas", 12: "High Point",
-        13: "Hawaii", 14: "Kennesaw St.", 15: "Lehigh", 16: "LIU",
+        13: "Hawai'i", 14: "Kennesaw St.", 15: "Lehigh", 16: "Long Island University",
     },
     "Midwest": {
         1: "Michigan", 2: "Iowa St.", 3: "Virginia", 4: "Alabama",
         5: "Texas Tech", 6: "Tennessee", 7: "Kentucky", 8: "Georgia",
-        9: "Saint Louis", 10: "Santa Clara", 11: "Miami (OH)", 12: "Akron",
+        9: "Saint Louis", 10: "Santa Clara", 11: "Miami OH", 12: "Akron",
         13: "Hofstra", 14: "Wright St.", 15: "UMBC", 16: "Howard",
     },
 }
@@ -48,8 +48,8 @@ BRACKET_2025 = {
     "West": {
         1: "Florida", 2: "St. John's", 3: "Texas Tech", 4: "Maryland",
         5: "Memphis", 6: "Missouri", 7: "UCLA", 8: "Connecticut",
-        9: "Oklahoma", 10: "New Mexico", 11: "Drake", 12: "McNeese",
-        13: "Troy", 14: "High Point", 15: "Omaha", 16: "SIU Edwardsville",
+        9: "Oklahoma", 10: "New Mexico", 11: "Drake", 12: "McNeese St.",
+        13: "Troy", 14: "High Point", 15: "Nebraska Omaha", 16: "SIU Edwardsville",
     },
     "South": {
         1: "Auburn", 2: "Michigan St.", 3: "Iowa St.", 4: "Texas A&M",
@@ -82,14 +82,14 @@ BRACKET_2024 = {
     "South": {
         1: "Houston", 2: "Marquette", 3: "Kentucky", 4: "Duke",
         5: "Wisconsin", 6: "Texas Tech", 7: "Florida", 8: "Nebraska",
-        9: "Texas A&M", 10: "Colorado", 11: "North Carolina St.", 12: "James Madison",
+        9: "Texas A&M", 10: "Colorado", 11: "NC State", 12: "James Madison",
         13: "Vermont", 14: "Oakland", 15: "Akron", 16: "Longwood",
     },
     "Midwest": {
         1: "Purdue", 2: "Tennessee", 3: "Creighton", 4: "Kansas",
         5: "Gonzaga", 6: "South Carolina", 7: "Texas", 8: "Utah St.",
-        9: "TCU", 10: "Colorado St.", 11: "Oregon", 12: "McNeese",
-        13: "Grambling", 14: "Akron", 15: "Montana St.", 16: "Fairleigh Dickinson",
+        9: "TCU", 10: "Colorado St.", 11: "Oregon", 12: "McNeese St.",
+        13: "Grambling St.", 14: "Akron", 15: "Montana St.", 16: "Fairleigh Dickinson",
     },
 }
 
@@ -99,7 +99,7 @@ BRACKET_2023 = {
         1: "Purdue", 2: "Marquette", 3: "Kansas St.", 4: "Tennessee",
         5: "Duke", 6: "Kentucky", 7: "Michigan St.", 8: "Memphis",
         9: "Florida Atlantic", 10: "USC", 11: "Providence", 12: "Oral Roberts",
-        13: "Louisiana Lafayette", 14: "Montana St.", 15: "Colgate", 16: "Fairleigh Dickinson",
+        13: "Louisiana", 14: "Montana St.", 15: "Colgate", 16: "Fairleigh Dickinson",
     },
     "West": {
         1: "Kansas", 2: "UCLA", 3: "Gonzaga", 4: "Connecticut",
@@ -110,8 +110,8 @@ BRACKET_2023 = {
     "South": {
         1: "Alabama", 2: "Arizona", 3: "Baylor", 4: "Virginia",
         5: "San Diego St.", 6: "Creighton", 7: "Missouri", 8: "Maryland",
-        9: "West Virginia", 10: "Utah St.", 11: "North Carolina St.", 12: "Charleston",
-        13: "Furman", 14: "UC Santa Barbara", 15: "Princeton", 16: "Texas A&M Corpus Christi",
+        9: "West Virginia", 10: "Utah St.", 11: "NC State", 12: "Charleston",
+        13: "Furman", 14: "UC Santa Barbara", 15: "Princeton", 16: "Texas A&M-CC",
     },
     "Midwest": {
         1: "Houston", 2: "Texas", 3: "Xavier", 4: "Indiana",
@@ -195,7 +195,7 @@ BRACKET_2019 = {
         1: "Virginia", 2: "Tennessee", 3: "Purdue", 4: "Kansas",
         5: "Auburn", 6: "Iowa St.", 7: "Cincinnati", 8: "Mississippi",
         9: "Oklahoma", 10: "Iowa", 11: "Ohio St.", 12: "New Mexico St.",
-        13: "UC Irvine", 14: "Old Dominion", 15: "Gardner-Webb", 16: "Northern Kentucky",
+        13: "UC Irvine", 14: "Old Dominion", 15: "Gardner Webb", 16: "Northern Kentucky",
     },
     "Midwest": {
         1: "North Carolina", 2: "Kentucky", 3: "Houston", 4: "Kansas",
@@ -239,19 +239,19 @@ BRACKET_2017 = {
         1: "Villanova", 2: "Duke", 3: "Baylor", 4: "Florida",
         5: "Virginia", 6: "SMU", 7: "South Carolina", 8: "Wisconsin",
         9: "Virginia Tech", 10: "Marquette", 11: "USC", 12: "UNC Wilmington",
-        13: "ETSU", 14: "Troy", 15: "North Dakota", 16: "Mt. St. Mary's",
+        13: "East Tennessee St.", 14: "Troy", 15: "North Dakota", 16: "Mount St. Mary's",
     },
     "West": {
         1: "Gonzaga", 2: "Arizona", 3: "Florida St.", 4: "West Virginia",
         5: "Notre Dame", 6: "Maryland", 7: "Saint Mary's", 8: "Northwestern",
         9: "Vanderbilt", 10: "VCU", 11: "Xavier", 12: "Princeton",
-        13: "Bucknell", 14: "New Mexico St.", 15: "UNCG", 16: "South Dakota St.",
+        13: "Bucknell", 14: "New Mexico St.", 15: "UNC Greensboro", 16: "South Dakota St.",
     },
     "South": {
         1: "North Carolina", 2: "Kentucky", 3: "UCLA", 4: "Butler",
         5: "Minnesota", 6: "Cincinnati", 7: "Dayton", 8: "Arkansas",
         9: "Seton Hall", 10: "Wichita St.", 11: "Rhode Island", 12: "Middle Tennessee",
-        13: "Vermont", 14: "ETSU", 15: "Northern Kentucky", 16: "Texas Southern",
+        13: "Vermont", 14: "East Tennessee St.", 15: "Northern Kentucky", 16: "Texas Southern",
     },
     "Midwest": {
         1: "Kansas", 2: "Louisville", 3: "Oregon", 4: "Purdue",
@@ -271,7 +271,7 @@ BRACKET_2016 = {
     },
     "South": {
         1: "Virginia", 2: "Oklahoma", 3: "Texas A&M", 4: "Iowa St.",
-        5: "Baylor", 6: "Arizona St.", 7: "Iowa", 8: "St. Joseph's",
+        5: "Baylor", 6: "Arizona St.", 7: "Iowa", 8: "Saint Joseph's",
         9: "Cincinnati", 10: "VCU", 11: "Kansas St.", 12: "Little Rock",
         13: "Iona", 14: "Buffalo", 15: "Gonzaga", 16: "UNC Asheville",
     },
@@ -299,7 +299,7 @@ BRACKET_2015 = {
     },
     "East": {
         1: "Villanova", 2: "Virginia", 3: "Oklahoma", 4: "Louisville",
-        5: "Northern Iowa", 6: "Providence", 7: "Michigan St.", 8: "NC State",
+        5: "Northern Iowa", 6: "Providence", 7: "Michigan St.", 8: "N.C. State",
         9: "LSU", 10: "Georgia", 11: "Dayton", 12: "Wyoming",
         13: "Manhattan", 14: "Belmont", 15: "Milwaukee", 16: "Lafayette",
     },
