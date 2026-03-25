@@ -14,20 +14,20 @@ BRACKET_2026 = {
     "East": {
         1: "Duke", 2: "Connecticut", 3: "Michigan St.", 4: "Kansas",
         5: "St. John's", 6: "Louisville", 7: "UCLA", 8: "Ohio St.",
-        9: "TCU", 10: "NC State", 11: "South Florida", 12: "Northern Iowa",
+        9: "TCU", 10: "N.C. State", 11: "South Florida", 12: "Northern Iowa",
         13: "Cal Baptist", 14: "North Dakota St.", 15: "Furman", 16: "Siena",
     },
     "South": {
         1: "Florida", 2: "Houston", 3: "Illinois", 4: "Nebraska",
         5: "Vanderbilt", 6: "North Carolina", 7: "Saint Mary's", 8: "Clemson",
         9: "Iowa", 10: "Texas A&M", 11: "VCU", 12: "McNeese St.",
-        13: "Troy", 14: "Pennsylvania", 15: "Idaho", 16: "Prairie View A&M",
+        13: "Troy", 14: "Penn", 15: "Idaho", 16: "Prairie View A&M",
     },
     "West": {
         1: "Arizona", 2: "Purdue", 3: "Gonzaga", 4: "Arkansas",
         5: "Wisconsin", 6: "BYU", 7: "Miami FL", 8: "Villanova",
         9: "Utah St.", 10: "SMU", 11: "Texas", 12: "High Point",
-        13: "Hawai'i", 14: "Kennesaw St.", 15: "Lehigh", 16: "Long Island University",
+        13: "Hawaii", 14: "Kennesaw St.", 15: "Lehigh", 16: "LIU",
     },
     "Midwest": {
         1: "Michigan", 2: "Iowa St.", 3: "Virginia", 4: "Alabama",
@@ -82,7 +82,7 @@ BRACKET_2024 = {
     "South": {
         1: "Houston", 2: "Marquette", 3: "Kentucky", 4: "Duke",
         5: "Wisconsin", 6: "Texas Tech", 7: "Florida", 8: "Nebraska",
-        9: "Texas A&M", 10: "Colorado", 11: "NC State", 12: "James Madison",
+        9: "Texas A&M", 10: "Colorado", 11: "N.C. State", 12: "James Madison",
         13: "Vermont", 14: "Oakland", 15: "Akron", 16: "Longwood",
     },
     "Midwest": {
@@ -110,8 +110,8 @@ BRACKET_2023 = {
     "South": {
         1: "Alabama", 2: "Arizona", 3: "Baylor", 4: "Virginia",
         5: "San Diego St.", 6: "Creighton", 7: "Missouri", 8: "Maryland",
-        9: "West Virginia", 10: "Utah St.", 11: "NC State", 12: "Charleston",
-        13: "Furman", 14: "UC Santa Barbara", 15: "Princeton", 16: "Texas A&M-CC",
+        9: "West Virginia", 10: "Utah St.", 11: "N.C. State", 12: "Charleston",
+        13: "Furman", 14: "UC Santa Barbara", 15: "Princeton", 16: "Texas A&M Corpus Chris",
     },
     "Midwest": {
         1: "Houston", 2: "Texas", 3: "Xavier", 4: "Indiana",
