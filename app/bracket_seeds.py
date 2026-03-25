@@ -4,39 +4,40 @@ app/bracket_seeds.py
 NCAA Tournament bracket seeds by season (2015–2026).
 Team names use BartTorvik short names to match team_stats table.
 Data sourced from verified Round of 64 brackets (First Four excluded).
+2020 tournament cancelled (COVID-19).
 
 get_seed(team, season) -> (seed, region) or (None, None)
 """
 
-# 2026 bracket (confirmed Round of 64)
+# 2026 bracket (Sweet 16 as of March 25, 2026)
 BRACKET_2026 = {
     "East": {
-        1: "Duke", 2: "Iowa", 3: "Michigan St.", 4: "Texas A&M",
-        5: "Oklahoma", 6: "TCU", 7: "Louisville", 8: "Georgia",
-        9: "Colorado", 10: "Iowa St.", 11: "Texas", 12: "McNeese",
-        13: "Colgate", 14: "Lipscomb", 15: "Bryant", 16: "Howard",
-    },
-    "West": {
-        1: "Florida", 2: "Alabama", 3: "Gonzaga", 4: "Arizona",
-        5: "Villanova", 6: "Arkansas", 7: "Clemson", 8: "Vanderbilt",
-        9: "Utah St.", 10: "Ohio St.", 11: "Hofstra", 12: "Hawaii",
-        13: "Liberty", 14: "Akron", 15: "Vermont", 16: "Prairie View",
+        1: "Duke", 2: "Connecticut", 3: "Michigan St.", 4: "Kansas",
+        5: "St. John's", 6: "Louisville", 7: "UCLA", 8: "Ohio St.",
+        9: "TCU", 10: "North Carolina St.", 11: "South Florida", 12: "Northern Iowa",
+        13: "CA Baptist", 14: "North Dakota St.", 15: "Furman", 16: "Siena",
     },
     "South": {
-        1: "Auburn", 2: "Tennessee", 3: "Illinois", 4: "Maryland",
-        5: "Michigan", 6: "BYU", 7: "Marquette", 8: "Kentucky",
-        9: "Memphis", 10: "VCU", 11: "Drake", 12: "Colorado St.",
-        13: "Yale", 14: "Chattanooga", 15: "Bryant", 16: "Alabama St.",
+        1: "Florida", 2: "Houston", 3: "Illinois", 4: "Nebraska",
+        5: "Vanderbilt", 6: "North Carolina", 7: "Saint Mary's", 8: "Clemson",
+        9: "Iowa", 10: "Texas A&M", 11: "VCU", 12: "McNeese",
+        13: "Troy", 14: "Penn", 15: "Idaho", 16: "Prairie View",
+    },
+    "West": {
+        1: "Arizona", 2: "Purdue", 3: "Gonzaga", 4: "Arkansas",
+        5: "Wisconsin", 6: "BYU", 7: "Miami FL", 8: "Villanova",
+        9: "Utah St.", 10: "SMU", 11: "Texas", 12: "High Point",
+        13: "Hawaii", 14: "Kennesaw St.", 15: "Lehigh", 16: "LIU",
     },
     "Midwest": {
-        1: "Kansas", 2: "Baylor", 3: "Wisconsin", 4: "Purdue",
-        5: "Notre Dame", 6: "Creighton", 7: "Mississippi", 8: "Oregon",
-        9: "Missouri", 10: "Indiana", 11: "UCF", 12: "New Mexico",
-        13: "San Francisco", 14: "Grand Canyon", 15: "Montana St.", 16: "North Dakota St.",
+        1: "Michigan", 2: "Iowa St.", 3: "Virginia", 4: "Alabama",
+        5: "Texas Tech", 6: "Tennessee", 7: "Kentucky", 8: "Georgia",
+        9: "Saint Louis", 10: "Santa Clara", 11: "Miami (OH)", 12: "Akron",
+        13: "Hofstra", 14: "Wright St.", 15: "UMBC", 16: "Howard",
     },
 }
 
-# 2025 bracket (confirmed Round of 64) — Champion: Florida
+# 2025 bracket — Champion: Florida
 BRACKET_2025 = {
     "East": {
         1: "Duke", 2: "Alabama", 3: "Wisconsin", 4: "Arizona",
@@ -64,7 +65,7 @@ BRACKET_2025 = {
     },
 }
 
-# 2024 bracket (confirmed Round of 64) — Champion: Connecticut
+# 2024 bracket — Champion: Connecticut
 BRACKET_2024 = {
     "East": {
         1: "Connecticut", 2: "Iowa", 3: "Illinois", 4: "Auburn",
@@ -92,7 +93,7 @@ BRACKET_2024 = {
     },
 }
 
-# 2023 bracket (confirmed Round of 64) — Champion: Connecticut
+# 2023 bracket — Champion: Connecticut
 BRACKET_2023 = {
     "East": {
         1: "Purdue", 2: "Marquette", 3: "Kansas St.", 4: "Tennessee",
@@ -120,7 +121,7 @@ BRACKET_2023 = {
     },
 }
 
-# 2022 bracket (confirmed Round of 64) — Champion: Kansas
+# 2022 bracket — Champion: Kansas
 BRACKET_2022 = {
     "East": {
         1: "Baylor", 2: "Kentucky", 3: "Purdue", 4: "UCLA",
@@ -148,7 +149,7 @@ BRACKET_2022 = {
     },
 }
 
-# 2021 bracket (confirmed Round of 64) — Champion: Baylor
+# 2021 bracket — Champion: Baylor
 BRACKET_2021 = {
     "East": {
         1: "Michigan", 2: "Alabama", 3: "Texas", 4: "Florida St.",
@@ -176,7 +177,7 @@ BRACKET_2021 = {
     },
 }
 
-# 2019 bracket (confirmed Round of 64) — Champion: Virginia
+# 2019 bracket — Champion: Virginia
 BRACKET_2019 = {
     "East": {
         1: "Duke", 2: "Michigan St.", 3: "LSU", 4: "Virginia Tech",
@@ -204,7 +205,7 @@ BRACKET_2019 = {
     },
 }
 
-# 2018 bracket (confirmed Round of 64) — Champion: Villanova
+# 2018 bracket — Champion: Villanova
 BRACKET_2018 = {
     "East": {
         1: "Villanova", 2: "Purdue", 3: "Texas Tech", 4: "Wichita St.",
@@ -232,7 +233,7 @@ BRACKET_2018 = {
     },
 }
 
-# 2017 bracket (confirmed Round of 64) — Champion: North Carolina
+# 2017 bracket — Champion: North Carolina
 BRACKET_2017 = {
     "East": {
         1: "Villanova", 2: "Duke", 3: "Baylor", 4: "Florida",
@@ -260,19 +261,13 @@ BRACKET_2017 = {
     },
 }
 
-# 2016 bracket (confirmed Round of 64) — Champion: Villanova
+# 2016 bracket — Champion: Villanova
 BRACKET_2016 = {
     "East": {
         1: "North Carolina", 2: "Xavier", 3: "West Virginia", 4: "Indiana",
         5: "Connecticut", 6: "Maryland", 7: "Wisconsin", 8: "USC",
         9: "Providence", 10: "Temple", 11: "Wichita St.", 12: "Northern Iowa",
         13: "Iona", 14: "Stephen F. Austin", 15: "Chattanooga", 16: "Florida Gulf Coast",
-    },
-    "West": {
-        1: "Oregon", 2: "Oklahoma St.", 3: "Utah", 4: "Duke",
-        5: "Michigan St.", 6: "Texas", 7: "Oregon St.", 8: "Saint Mary's",
-        9: "Vanderbilt", 10: "Syracuse", 11: "Gonzaga", 12: "Yale",
-        13: "Hawaii", 14: "Northern Iowa", 15: "Cal St. Bakersfield", 16: "Holy Cross",
     },
     "South": {
         1: "Virginia", 2: "Oklahoma", 3: "Texas A&M", 4: "Iowa St.",
@@ -286,9 +281,15 @@ BRACKET_2016 = {
         9: "Connecticut", 10: "Temple", 11: "Seton Hall", 12: "South Dakota St.",
         13: "Austin Peay", 14: "Fresno St.", 15: "Hawaii", 16: "Austin Peay",
     },
+    "West": {
+        1: "Oregon", 2: "Oklahoma St.", 3: "Utah", 4: "Duke",
+        5: "Michigan St.", 6: "Texas", 7: "Oregon St.", 8: "Saint Mary's",
+        9: "Vanderbilt", 10: "Syracuse", 11: "Gonzaga", 12: "Yale",
+        13: "Hawaii", 14: "Northern Iowa", 15: "Cal St. Bakersfield", 16: "Holy Cross",
+    },
 }
 
-# 2015 bracket (confirmed Round of 64) — Champion: Duke
+# 2015 bracket — Champion: Duke
 BRACKET_2015 = {
     "Midwest": {
         1: "Kentucky", 2: "Kansas", 3: "Notre Dame", 4: "Maryland",
@@ -300,7 +301,7 @@ BRACKET_2015 = {
         1: "Villanova", 2: "Virginia", 3: "Oklahoma", 4: "Louisville",
         5: "Northern Iowa", 6: "Providence", 7: "Michigan St.", 8: "NC State",
         9: "LSU", 10: "Georgia", 11: "Dayton", 12: "Wyoming",
-        13: "Northeastern", 14: "Manhattan", 15: "Belmont", 16: "Lafayette",
+        13: "Manhattan", 14: "Belmont", 15: "Milwaukee", 16: "Lafayette",
     },
     "South": {
         1: "Duke", 2: "Gonzaga", 3: "Iowa St.", 4: "Georgetown",
