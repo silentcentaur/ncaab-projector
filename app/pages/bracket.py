@@ -131,7 +131,16 @@ CSS = """
 div[data-testid="stButton"] > button {
     font-family: 'DM Mono', monospace !important;
     font-size: 0.6rem !important;
-    padding: 3px 6px !important;
+    padding: 0px 4px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    line-height: 28px !important;
+    border-radius: 4px !important;
+}
+/* Remove extra padding Streamlit wraps around buttons */
+div[data-testid="stButton"] {
+    margin: 0 !important;
+    padding: 0 !important;
 }
 </style>
 """
