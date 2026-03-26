@@ -203,50 +203,35 @@ def matchup_card(season, region, rnd, game):
         st.markdown('<div class="bk-tbd-card">TBD</div>', unsafe_allow_html=True)
         return
 
-    # Render card HTML + inline pick buttons per team row
-    st.markdown('<div class="bk-card">', unsafe_allow_html=True)
-    for slot, (team, seed) in enumerate([(ta, sa), (tb, sb)]):
-        is_last = slot == 1
-        is_win  = winner == team if team else False
-        is_lose = (winner is not None and winner != team) if team else False
-
+    def _row(team, seed, is_last=False):
         if not team:
-            st.markdown(
-                f'<div class="bk-card-team tbd{" last" if is_last else ""}">'
-                f'<span class="bk-teamname">TBD</span></div>',
-                unsafe_allow_html=True)
-            continue
-
-        cls = "bk-card-team"
-        if is_win:  cls += " winner"
-        if is_lose: cls += " loser"
-        if is_last: cls += " last"
+            cls = "bk-card-team tbd" + (" last" if is_last else "")
+            return f'<div class="{cls}"><span class="bk-teamname">TBD</span></div>'
+        is_win  = winner == team
+        is_lose = winner is not None and winner != team
+        cls = "bk-card-team" + (" winner" if is_win else "") + (" loser" if is_lose else "") + (" last" if is_last else "")
         seed_html = f'<span class="bk-seed">{seed}</span>' if seed else ''
-        icon = "✓" if is_win else ""
+        icon = '<span style="color:#22c55e;font-size:0.65rem;flex-shrink:0;">✓</span>' if is_win else ''
+        return f'<div class="{cls}">{seed_html}<span class="bk-teamname">{team}</span>{icon}</div>'
 
-        # Team info + pick button side by side
-        team_col, btn_col = st.columns([6, 1], gap="small")
-        with team_col:
-            st.markdown(
-                f'<div class="{cls}">{seed_html}'
-                f'<span class="bk-teamname">{team}</span>'
-                f'<span style="color:#22c55e;font-size:0.65rem;flex-shrink:0;">{icon}</span>'
-                f'</div>',
-                unsafe_allow_html=True)
-        with btn_col:
-            if can_pick:
-                btn_style = "primary" if is_win else "secondary"
-                if st.button("▶", key=f"p_{season}_{region}_{rnd}_{game}_{slot}",
-                             use_container_width=True, type=btn_style):
-                    set_winner(season, region, rnd, game, team)
-                    st.rerun()
-            else:
-                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-
-        if not is_last:
-            st.markdown("<div style='height:0px;'></div>",
-                        unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Single st.columns call: card HTML left, two buttons stacked right
+    card_col, btn_col = st.columns([5, 1], gap="small")
+    with card_col:
+        st.markdown(
+            f'<div class="bk-card">{_row(ta, sa)}{_row(tb, sb, is_last=True)}</div>',
+            unsafe_allow_html=True)
+    with btn_col:
+        if can_pick:
+            wa = winner == ta
+            wb = winner == tb
+            if st.button("▶", key=f"p_{season}_{region}_{rnd}_{game}_0",
+                         use_container_width=True, type="primary" if wa else "secondary"):
+                set_winner(season, region, rnd, game, ta)
+                st.rerun()
+            if st.button("▶", key=f"p_{season}_{region}_{rnd}_{game}_1",
+                         use_container_width=True, type="primary" if wb else "secondary"):
+                set_winner(season, region, rnd, game, tb)
+                st.rerun()
 
 
 def region_winner_card(season, region):
@@ -267,41 +252,32 @@ def ff_card(season, matchup_idx, r1, r2):
 
     st.markdown(f'<div class="bk-ff-header">{r1} vs {r2}</div>', unsafe_allow_html=True)
 
-    def ff_team_row(team, is_last=False):
+    def _row(team, is_last=False):
         if not team:
-            cls = "bk-card-team tbd" + (" last" if is_last else "")
-            return f'<div class="{cls}"><span class="bk-teamname">TBD</span></div>'
+            return f'<div class="bk-card-team tbd{" last" if is_last else ""}"><span class="bk-teamname">TBD</span></div>'
         is_win = picked == team
         cls = "bk-card-team" + (" winner" if is_win else "") + (" last" if is_last else "")
-        icon = "✓" if is_win else ""
-        return (f'<div class="{cls}"><span class="bk-teamname">{team}</span>'
-                f'<span style="color:#22c55e;font-size:0.7rem;">{icon}</span></div>')
+        icon = '<span style="color:#22c55e;font-size:0.65rem;">✓</span>' if is_win else ""
+        return f'<div class="{cls}"><span class="bk-teamname">{team}</span>{icon}</div>'
 
-    st.markdown(
-        f'<div class="bk-card">{ff_team_row(t1)}{ff_team_row(t2, is_last=True)}</div>',
-        unsafe_allow_html=True)
-
-    if t1 and t2:
-        for i, team in enumerate([t1, t2]):
-            is_picked = picked == team
-            tc, bc = st.columns([6, 1], gap="small")
-            with tc:
-                cls = "bk-card-team" + (" winner" if is_picked else "") + (" last" if i==1 else "")
-                icon = "✓" if is_picked else ""
-                st.markdown(
-                    f'<div class="{cls}"><span class="bk-teamname">{team}</span>'
-                    f'<span style="color:#22c55e;font-size:0.65rem;">{icon}</span></div>',
+    card_col, btn_col = st.columns([5, 1], gap="small")
+    with card_col:
+        st.markdown(f'<div class="bk-card">{_row(t1)}{_row(t2, is_last=True)}</div>',
                     unsafe_allow_html=True)
-            with bc:
-                if st.button("▶", key=f"ff_{season}_{matchup_idx}_{i}",
-                             use_container_width=True,
-                             type="primary" if is_picked else "secondary"):
-                    _s(season)["ff"][matchup_idx] = team
-                    _s(season)["champion"] = None
-                    st.rerun()
-            if i == 0:
-                st.markdown("<div style='height:0px;'></div>",
-                            unsafe_allow_html=True)
+    with btn_col:
+        if t1 and t2:
+            if st.button("▶", key=f"ff_{season}_{matchup_idx}_0",
+                         use_container_width=True,
+                         type="primary" if picked==t1 else "secondary"):
+                _s(season)["ff"][matchup_idx] = t1
+                _s(season)["champion"] = None
+                st.rerun()
+            if st.button("▶", key=f"ff_{season}_{matchup_idx}_1",
+                         use_container_width=True,
+                         type="primary" if picked==t2 else "secondary"):
+                _s(season)["ff"][matchup_idx] = t2
+                _s(season)["champion"] = None
+                st.rerun()
 
 
 def champ_card(season):
@@ -315,40 +291,30 @@ def champ_card(season):
         '🏆 CHAMPIONSHIP</div>',
         unsafe_allow_html=True)
 
-    def champ_row(team, is_last=False):
+    def _row(team, is_last=False):
         if not team:
-            cls = "bk-card-team tbd" + (" last" if is_last else "")
-            return f'<div class="{cls}"><span class="bk-teamname">TBD</span></div>'
+            return f'<div class="bk-card-team tbd{" last" if is_last else ""}"><span class="bk-teamname">TBD</span></div>'
         is_win = champ == team
         cls = "bk-card-team" + (" winner" if is_win else "") + (" last" if is_last else "")
-        icon = "🏆" if is_win else ""
-        return (f'<div class="{cls}"><span class="bk-teamname">{team}</span>'
-                f'<span style="color:#fbbf24;font-size:0.7rem;">{icon}</span></div>')
+        icon = '<span style="color:#fbbf24;font-size:0.65rem;">🏆</span>' if is_win else ""
+        return f'<div class="{cls}"><span class="bk-teamname">{team}</span>{icon}</div>'
 
-    st.markdown(
-        f'<div class="bk-card">{champ_row(ct1)}{champ_row(ct2, is_last=True)}</div>',
-        unsafe_allow_html=True)
-
-    if ct1 and ct2:
-        for i, team in enumerate([ct1, ct2]):
-            is_champ = champ == team
-            tc, bc = st.columns([6, 1], gap="small")
-            with tc:
-                cls = "bk-card-team" + (" winner" if is_champ else "") + (" last" if i==1 else "")
-                icon = "🏆" if is_champ else ""
-                st.markdown(
-                    f'<div class="{cls}"><span class="bk-teamname">{team}</span>'
-                    f'<span style="color:#fbbf24;font-size:0.65rem;">{icon}</span></div>',
+    card_col, btn_col = st.columns([5, 1], gap="small")
+    with card_col:
+        st.markdown(f'<div class="bk-card">{_row(ct1)}{_row(ct2, is_last=True)}</div>',
                     unsafe_allow_html=True)
-            with bc:
-                if st.button("▶", key=f"champ_{season}_{i}",
-                             use_container_width=True,
-                             type="primary" if is_champ else "secondary"):
-                    _s(season)["champion"] = team
-                    st.rerun()
-            if i == 0:
-                st.markdown("<div style='height:0px;'></div>",
-                            unsafe_allow_html=True)
+    with btn_col:
+        if ct1 and ct2:
+            if st.button("▶", key=f"champ_{season}_0",
+                         use_container_width=True,
+                         type="primary" if champ==ct1 else "secondary"):
+                _s(season)["champion"] = ct1
+                st.rerun()
+            if st.button("▶", key=f"champ_{season}_1",
+                         use_container_width=True,
+                         type="primary" if champ==ct2 else "secondary"):
+                _s(season)["champion"] = ct2
+                st.rerun()
 
     if champ:
         st.markdown(f"""
